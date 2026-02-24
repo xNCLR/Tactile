@@ -7,7 +7,10 @@ import Register from './pages/Register';
 import Search from './pages/Search';
 import TeacherProfile from './pages/TeacherProfile';
 import Dashboard from './pages/Dashboard';
+import EditProfile from './pages/EditProfile';
 import BookingConfirmation from './pages/BookingConfirmation';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -23,6 +26,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/search" element={<Search />} />
         <Route path="/teacher/:id" element={<TeacherProfile />} />
         <Route
@@ -30,6 +35,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/edit"
+          element={
+            <ProtectedRoute>
+              <EditProfile />
             </ProtectedRoute>
           }
         />

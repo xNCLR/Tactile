@@ -2,7 +2,9 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { getDb, queryOne, runSql, saveDb } = require('../db/schema');
+const crypto = require('crypto');
 const { generateToken, authenticate } = require('../middleware/auth');
+const { sendPasswordResetEmail } = require('../services/email');
 
 const router = express.Router();
 
@@ -88,6 +90,57 @@ router.get('/me', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Auth check error:', err);
     res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const db = await getDb();
+    const user = queryOne(db, 'SELECT id, name, email FROM users WHERE email = ?', [email]);
+
+    // Always return success to prevent email enumeration
+    if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    runSql(db, 'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), user.id, token, expiresAt]);
+
+    const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
+    await sendPasswordResetEmail({ email: user.email, name: user.name, resetUrl });
+
+    res.json({ message: 'If that email exists, a reset link has been sent.' });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Failed to process reset request' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    const db = await getDb();
+    const resetToken = queryOne(db, "SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now')", [token]);
+
+    if (!resetToken) return res.status(400).json({ error: 'Invalid or expired reset link' });
+
+    const passwordHash = bcrypt.hashSync(password, 10);
+    runSql(db, 'UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?', [passwordHash, resetToken.user_id]);
+    runSql(db, 'UPDATE password_reset_tokens SET used = 1 WHERE id = ?', [resetToken.id]);
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 

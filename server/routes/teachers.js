@@ -88,4 +88,46 @@ router.put('/profile', authenticate, requireRole('teacher'), async (req, res) =>
   }
 });
 
+// POST /api/teachers/time-slots
+router.post('/time-slots', authenticate, requireRole('teacher'), async (req, res) => {
+  try {
+    const { dayOfWeek, startTime, endTime } = req.body;
+    if (dayOfWeek === undefined || !startTime || !endTime) {
+      return res.status(400).json({ error: 'dayOfWeek, startTime, and endTime are required' });
+    }
+
+    const db = await getDb();
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    const { v4: uuidv4 } = require('uuid');
+    const id = uuidv4();
+    runSql(db, 'INSERT INTO time_slots (id, teacher_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
+      [id, profile.id, dayOfWeek, startTime, endTime]);
+
+    res.status(201).json({ slot: { id, day_of_week: dayOfWeek, start_time: startTime, end_time: endTime, is_available: 1 } });
+  } catch (err) {
+    console.error('Add time slot error:', err);
+    res.status(500).json({ error: 'Failed to add time slot' });
+  }
+});
+
+// DELETE /api/teachers/time-slots/:id
+router.delete('/time-slots/:id', authenticate, requireRole('teacher'), async (req, res) => {
+  try {
+    const db = await getDb();
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    const slot = queryOne(db, 'SELECT id FROM time_slots WHERE id = ? AND teacher_id = ?', [req.params.id, profile.id]);
+    if (!slot) return res.status(404).json({ error: 'Time slot not found' });
+
+    runSql(db, 'DELETE FROM time_slots WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Time slot removed' });
+  } catch (err) {
+    console.error('Remove time slot error:', err);
+    res.status(500).json({ error: 'Failed to remove time slot' });
+  }
+});
+
 module.exports = router;

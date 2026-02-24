@@ -65,6 +65,9 @@ export default function Login() {
         Don't have an account?{' '}
         <Link to="/register" className="text-brand-600 hover:underline">Sign up</Link>
       </p>
+      <p className="text-sm text-center mt-2">
+        <Link to="/forgot-password" className="text-gray-400 hover:text-gray-600">Forgot your password?</Link>
+      </p>
 
       <div className="mt-6 p-3 bg-gray-50 rounded-lg text-xs text-gray-400">
         <strong>Demo accounts:</strong> Use any seeded email (e.g. sarah@example.com) with password: password123

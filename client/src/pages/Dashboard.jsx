@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
 
@@ -33,7 +34,10 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-1">Dashboard</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <Link to="/profile/edit" className="text-sm text-brand-600 hover:underline">Edit Profile</Link>
+      </div>
       <p className="text-gray-500 mb-6">
         Welcome back, {user?.name}. You're logged in as a <span className="font-medium text-gray-700">{user?.role}</span>.
       </p>

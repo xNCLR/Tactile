@@ -35,6 +35,8 @@ export const api = {
   },
   getTeacher: (id) => request(`/teachers/${id}`),
   updateTeacherProfile: (data) => request('/teachers/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  addTimeSlot: (data) => request('/teachers/time-slots', { method: 'POST', body: JSON.stringify(data) }),
+  removeTimeSlot: (id) => request(`/teachers/time-slots/${id}`, { method: 'DELETE' }),
 
   // Bookings (two-step Stripe flow)
   createPaymentIntent: (data) => request('/bookings/create-intent', { method: 'POST', body: JSON.stringify(data) }),
