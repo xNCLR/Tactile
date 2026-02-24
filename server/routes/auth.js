@@ -11,13 +11,10 @@ const router = express.Router();
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name, role, phone, postcode, latitude, longitude } = req.body;
+    const { email, password, name, phone, postcode, latitude, longitude } = req.body;
 
-    if (!email || !password || !name || !role) {
-      return res.status(400).json({ error: 'Email, password, name, and role are required' });
-    }
-    if (!['teacher', 'student'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be teacher or student' });
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required' });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -33,15 +30,10 @@ router.post('/register', async (req, res) => {
     const passwordHash = bcrypt.hashSync(password, 10);
 
     runSql(db, `INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, email, passwordHash, name, role, phone || null, postcode || null, latitude || null, longitude || null]);
+      [id, email, passwordHash, name, 'user', phone || null, postcode || null, latitude || null, longitude || null]);
 
-    if (role === 'teacher') {
-      const profileId = uuidv4();
-      runSql(db, `INSERT INTO teacher_profiles (id, user_id, hourly_rate) VALUES (?, ?, ?)`, [profileId, id, 30]);
-    }
-
-    const token = generateToken({ id, email, role });
-    res.status(201).json({ token, user: { id, email, name, role } });
+    const token = generateToken({ id, email });
+    res.status(201).json({ token, user: { id, email, name } });
   } catch (err) {
     console.error('Registration error:', err);
     res.status(500).json({ error: 'Registration failed' });
@@ -63,10 +55,13 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    const teacherProfile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+
     const token = generateToken(user);
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role, postcode: user.postcode, phone: user.phone, profilePhoto: user.profile_photo },
+      user: { id: user.id, email: user.email, name: user.name, postcode: user.postcode, phone: user.phone, profilePhoto: user.profile_photo, isTeacher: !!teacherProfile },
+      teacherProfile,
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -78,15 +73,16 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const db = await getDb();
-    const user = queryOne(db, 'SELECT id, email, name, role, phone, postcode, latitude, longitude, profile_photo FROM users WHERE id = ?', [req.user.id]);
-
-    let teacherProfile = null;
-    if (user && user.role === 'teacher') {
-      teacherProfile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
-    }
+    const user = queryOne(db, 'SELECT id, email, name, phone, postcode, latitude, longitude, profile_photo FROM users WHERE id = ?', [req.user.id]);
 
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: { ...user, profilePhoto: user.profile_photo }, teacherProfile });
+
+    const teacherProfile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+
+    res.json({
+      user: { ...user, profilePhoto: user.profile_photo, isTeacher: !!teacherProfile },
+      teacherProfile,
+    });
   } catch (err) {
     console.error('Auth check error:', err);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -102,11 +98,10 @@ router.post('/forgot-password', async (req, res) => {
     const db = await getDb();
     const user = queryOne(db, 'SELECT id, name, email FROM users WHERE email = ?', [email]);
 
-    // Always return success to prevent email enumeration
     if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
     runSql(db, 'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
       [uuidv4(), user.id, token, expiresAt]);

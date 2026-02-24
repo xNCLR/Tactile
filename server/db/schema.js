@@ -38,7 +38,7 @@ async function initDb() {
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     name TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('teacher', 'student')),
+    role TEXT DEFAULT 'user',
     phone TEXT,
     postcode TEXT,
     latitude REAL,

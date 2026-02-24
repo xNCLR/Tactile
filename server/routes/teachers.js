@@ -1,6 +1,6 @@
 const express = require('express');
 const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireTeacherProfile } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -71,18 +71,29 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/teachers/profile
-router.put('/profile', authenticate, requireRole('teacher'), async (req, res) => {
+// PUT /api/teachers/profile — create or update teacher profile
+router.put('/profile', authenticate, async (req, res) => {
   try {
     const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends } = req.body;
     const db = await getDb();
 
-    runSql(db, `UPDATE teacher_profiles SET bio = COALESCE(?, bio), hourly_rate = COALESCE(?, hourly_rate),
-      equipment_requirements = COALESCE(?, equipment_requirements), available_weekdays = COALESCE(?, available_weekdays),
-      available_weekends = COALESCE(?, available_weekends), updated_at = datetime('now') WHERE user_id = ?`,
-      [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, req.user.id]);
+    let profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
 
-    const profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (profile) {
+      // Update existing
+      runSql(db, `UPDATE teacher_profiles SET bio = COALESCE(?, bio), hourly_rate = COALESCE(?, hourly_rate),
+        equipment_requirements = COALESCE(?, equipment_requirements), available_weekdays = COALESCE(?, available_weekdays),
+        available_weekends = COALESCE(?, available_weekends), updated_at = datetime('now') WHERE user_id = ?`,
+        [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, req.user.id]);
+    } else {
+      // Create new teacher profile
+      const { v4: uuidv4 } = require('uuid');
+      const profileId = uuidv4();
+      runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1]);
+    }
+
+    profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     res.json({ profile });
   } catch (err) {
     console.error('Profile update error:', err);
@@ -91,7 +102,7 @@ router.put('/profile', authenticate, requireRole('teacher'), async (req, res) =>
 });
 
 // POST /api/teachers/time-slots
-router.post('/time-slots', authenticate, requireRole('teacher'), async (req, res) => {
+router.post('/time-slots', authenticate, requireTeacherProfile, async (req, res) => {
   try {
     const { dayOfWeek, startTime, endTime } = req.body;
     if (dayOfWeek === undefined || !startTime || !endTime) {
@@ -115,7 +126,7 @@ router.post('/time-slots', authenticate, requireRole('teacher'), async (req, res
 });
 
 // DELETE /api/teachers/time-slots/:id
-router.delete('/time-slots/:id', authenticate, requireRole('teacher'), async (req, res) => {
+router.delete('/time-slots/:id', authenticate, requireTeacherProfile, async (req, res) => {
   try {
     const db = await getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);

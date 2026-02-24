@@ -114,14 +114,17 @@ router.get('/', authenticate, async (req, res) => {
     const db = await getDb();
     let bookings;
 
-    if (req.user.role === 'student') {
-      bookings = queryAll(db, `SELECT b.*, u.name as teacher_name, u.postcode as teacher_location, CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END as has_review FROM bookings b JOIN teacher_profiles tp ON b.teacher_id = tp.id JOIN users u ON tp.user_id = u.id LEFT JOIN reviews r ON r.booking_id = b.id WHERE b.student_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [req.user.id]);
-    } else {
-      const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
-      bookings = profile
-        ? queryAll(db, `SELECT b.*, u.name as student_name, u.email as student_email, u.phone as student_phone FROM bookings b JOIN users u ON b.student_id = u.id WHERE b.teacher_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [profile.id])
-        : [];
-    }
+    // Get bookings where user is the student
+    const studentBookings = queryAll(db, `SELECT b.*, 'student' as my_role, u.name as teacher_name, u.postcode as teacher_location, CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END as has_review FROM bookings b JOIN teacher_profiles tp ON b.teacher_id = tp.id JOIN users u ON tp.user_id = u.id LEFT JOIN reviews r ON r.booking_id = b.id WHERE b.student_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [req.user.id]);
+
+    // Get bookings where user is the teacher
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    const teacherBookings = profile
+      ? queryAll(db, `SELECT b.*, 'teacher' as my_role, u.name as student_name, u.email as student_email, u.phone as student_phone FROM bookings b JOIN users u ON b.student_id = u.id WHERE b.teacher_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [profile.id])
+      : [];
+
+    bookings = [...studentBookings, ...teacherBookings]
+      .sort((a, b) => b.booking_date?.localeCompare(a.booking_date) || 0);
 
     res.json({ bookings });
   } catch (err) {

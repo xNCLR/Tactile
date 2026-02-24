@@ -17,7 +17,8 @@ export default function EditProfile() {
   const [phone, setPhone] = useState('');
   const [postcode, setPostcode] = useState('');
 
-  // Teacher-only fields
+  // Teaching fields (available to all users)
+  const [showTeaching, setShowTeaching] = useState(false);
   const [bio, setBio] = useState('');
   const [hourlyRate, setHourlyRate] = useState(30);
   const [equipment, setEquipment] = useState('');
@@ -45,6 +46,7 @@ export default function EditProfile() {
       setPostcode(user.postcode || '');
     }
     if (teacherProfile) {
+      setShowTeaching(true);
       setBio(teacherProfile.bio || '');
       setHourlyRate(teacherProfile.hourly_rate || 30);
       setEquipment(teacherProfile.equipment_requirements || '');
@@ -120,7 +122,8 @@ export default function EditProfile() {
     try {
       await api.updateProfile({ name, phone, postcode });
 
-      if (user.role === 'teacher') {
+      if (showTeaching) {
+        // This will create a new teacher profile or update existing
         await api.updateTeacherProfile({
           bio,
           hourlyRate: parseFloat(hourlyRate),
@@ -229,8 +232,19 @@ export default function EditProfile() {
         </div>
       </div>
 
-      {/* Teacher-specific fields */}
-      {user.role === 'teacher' && (
+      {/* Teaching section — available to everyone */}
+      {!showTeaching ? (
+        <div className="bg-gradient-to-br from-brand-50 to-brand-100 rounded-xl border border-brand-200 p-6 mb-6 text-center">
+          <h2 className="font-semibold mb-1">Want to teach?</h2>
+          <p className="text-sm text-gray-600 mb-4">Set up a teaching profile and start sharing your photography skills.</p>
+          <button
+            onClick={() => setShowTeaching(true)}
+            className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+          >
+            Set Up Teaching Profile
+          </button>
+        </div>
+      ) : (
         <>
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-4">Teaching Profile</h2>

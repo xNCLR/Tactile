@@ -4,7 +4,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'tactile-dev-secret-change-in-produ
 
 function generateToken(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -26,13 +26,17 @@ function authenticate(req, res, next) {
   }
 }
 
-function requireRole(role) {
-  return (req, res, next) => {
-    if (req.user.role !== role) {
-      return res.status(403).json({ error: `${role} role required` });
+// Middleware: require user to have a teacher profile
+function requireTeacherProfile(req, res, next) {
+  const { getDb, queryOne } = require('../db/schema');
+  getDb().then((db) => {
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) {
+      return res.status(403).json({ error: 'Teacher profile required. Set up your teaching profile first.' });
     }
+    req.teacherProfile = profile;
     next();
-  };
+  }).catch(() => res.status(500).json({ error: 'Server error' }));
 }
 
-module.exports = { generateToken, authenticate, requireRole, JWT_SECRET };
+module.exports = { generateToken, authenticate, requireTeacherProfile, JWT_SECRET };

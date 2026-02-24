@@ -24,25 +24,26 @@ router.get('/threads', authenticate, async (req, res) => {
     const db = await getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
 
-    let bookings;
-    if (req.user.role === 'student') {
-      bookings = queryAll(db,
-        `SELECT b.id, b.booking_date, b.start_time, b.status, u.name as other_name, u.profile_photo as other_photo
-         FROM bookings b
-         JOIN teacher_profiles tp ON b.teacher_id = tp.id
-         JOIN users u ON tp.user_id = u.id
-         WHERE b.student_id = ? AND b.status IN ('confirmed', 'completed')
-         ORDER BY b.booking_date DESC`, [req.user.id]);
-    } else if (profile) {
-      bookings = queryAll(db,
+    // Get threads where user is student
+    const asStudent = queryAll(db,
+      `SELECT b.id, b.booking_date, b.start_time, b.status, u.name as other_name, u.profile_photo as other_photo
+       FROM bookings b
+       JOIN teacher_profiles tp ON b.teacher_id = tp.id
+       JOIN users u ON tp.user_id = u.id
+       WHERE b.student_id = ? AND b.status IN ('confirmed', 'completed')
+       ORDER BY b.booking_date DESC`, [req.user.id]);
+
+    // Get threads where user is teacher
+    const asTeacher = profile
+      ? queryAll(db,
         `SELECT b.id, b.booking_date, b.start_time, b.status, u.name as other_name, u.profile_photo as other_photo
          FROM bookings b
          JOIN users u ON b.student_id = u.id
          WHERE b.teacher_id = ? AND b.status IN ('confirmed', 'completed')
-         ORDER BY b.booking_date DESC`, [profile.id]);
-    } else {
-      bookings = [];
-    }
+         ORDER BY b.booking_date DESC`, [profile.id])
+      : [];
+
+    const bookings = [...asStudent, ...asTeacher];
 
     // Add unread counts and last message
     const threads = bookings.map((b) => {
@@ -84,13 +85,15 @@ router.get('/:bookingId', authenticate, async (req, res) => {
     runSql(db, 'UPDATE messages SET read = 1 WHERE booking_id = ? AND sender_id != ?',
       [req.params.bookingId, req.user.id]);
 
-    // Get other party info
+    // Get other party info — figure out if current user is the student or teacher in this booking
     let otherUser;
-    if (req.user.role === 'student') {
+    if (booking.student_id === req.user.id) {
+      // I'm the student, show teacher info
       otherUser = queryOne(db,
         `SELECT u.name, u.profile_photo FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`,
         [booking.teacher_id]);
     } else {
+      // I'm the teacher, show student info
       otherUser = queryOne(db, 'SELECT name, profile_photo FROM users WHERE id = ?', [booking.student_id]);
     }
 

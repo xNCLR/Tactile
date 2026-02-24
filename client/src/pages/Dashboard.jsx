@@ -89,7 +89,6 @@ export default function Dashboard() {
 
   const handleReviewSubmitted = () => {
     setReviewBooking(null);
-    // Mark the booking as completed in local state
     setBookings((prev) => prev.map((b) => (b.id === reviewBooking?.id ? { ...b, status: 'completed', has_review: 1 } : b)));
   };
 
@@ -106,12 +105,26 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <Link to="/profile/edit" className="text-sm text-brand-600 hover:underline">Edit Profile</Link>
       </div>
-      <p className="text-gray-500 mb-6">
-        Welcome back, {user?.name}. You're logged in as a <span className="font-medium text-gray-700">{user?.role}</span>.
-      </p>
+      <p className="text-gray-500 mb-6">Welcome back, {user?.name}.</p>
+
+      {/* Start Teaching CTA — shown if user has no teacher profile */}
+      {!teacherProfile && (
+        <div className="bg-gradient-to-br from-brand-50 to-brand-100 rounded-xl border border-brand-200 p-6 mb-6">
+          <h2 className="font-semibold mb-1">Share your photography skills</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Got a knack for portraits, street, or landscape photography? Set up a teaching profile and start earning.
+          </p>
+          <Link
+            to="/profile/edit"
+            className="inline-block bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+          >
+            Start Teaching
+          </Link>
+        </div>
+      )}
 
       {/* Teacher profile summary */}
-      {user?.role === 'teacher' && teacherProfile && (
+      {teacherProfile && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <h2 className="font-semibold mb-2">Your Teaching Profile</h2>
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -132,61 +145,67 @@ export default function Dashboard() {
       )}
 
       {/* Bookings */}
-      <h2 className="font-semibold mb-4">
-        {user?.role === 'teacher' ? 'Incoming Bookings' : 'Your Bookings'}
-      </h2>
+      <h2 className="font-semibold mb-4">Your Bookings</h2>
 
       {loading ? (
         <p className="text-gray-400 py-8 text-center">Loading bookings...</p>
       ) : bookings.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
-          No bookings yet. {user?.role === 'student' && 'Find a teacher to get started!'}
+          No bookings yet. Find a teacher to get started!
         </div>
       ) : (
         <div className="space-y-3">
-          {bookings.map((booking) => (
-            <div key={booking.id} className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <span className="font-medium">
-                    {user?.role === 'student' ? booking.teacher_name : booking.student_name}
-                  </span>
-                  {user?.role === 'teacher' && booking.student_email && (
-                    <span className="text-sm text-gray-400 ml-2">{booking.student_email}</span>
+          {bookings.map((booking) => {
+            const isMyStudentBooking = booking.my_role === 'student';
+            return (
+              <div key={booking.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <span className="font-medium">
+                      {isMyStudentBooking ? booking.teacher_name : booking.student_name}
+                    </span>
+                    {!isMyStudentBooking && booking.student_email && (
+                      <span className="text-sm text-gray-400 ml-2">{booking.student_email}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isMyStudentBooking && (
+                      <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">teaching</span>
+                    )}
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || ''}`}>
+                      {booking.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500 space-y-1">
+                  <p>{booking.booking_date} &middot; {booking.start_time} – {booking.end_time}</p>
+                  <p>
+                    {booking.duration_hours}h &middot; £{booking.total_price?.toFixed(2)}
+                    {booking.payment_status === 'refunded' && <span className="text-red-500 ml-1">(refunded)</span>}
+                  </p>
+                  {booking.notes && <p className="italic text-gray-400">"{booking.notes}"</p>}
+                </div>
+                <div className="mt-3 flex gap-3">
+                  {booking.status === 'confirmed' && (
+                    <button
+                      onClick={() => handleCancel(booking.id)}
+                      className="text-sm text-red-500 hover:text-red-700"
+                    >
+                      Cancel booking
+                    </button>
+                  )}
+                  {isMyStudentBooking && (booking.status === 'confirmed' || booking.status === 'completed') && !booking.has_review && (
+                    <button
+                      onClick={() => setReviewBooking(booking)}
+                      className="text-sm text-brand-600 hover:text-brand-800"
+                    >
+                      Leave a review
+                    </button>
                   )}
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || ''}`}>
-                  {booking.status}
-                </span>
               </div>
-              <div className="text-sm text-gray-500 space-y-1">
-                <p>{booking.booking_date} &middot; {booking.start_time} – {booking.end_time}</p>
-                <p>
-                  {booking.duration_hours}h &middot; £{booking.total_price?.toFixed(2)}
-                  {booking.payment_status === 'refunded' && <span className="text-red-500 ml-1">(refunded)</span>}
-                </p>
-                {booking.notes && <p className="italic text-gray-400">"{booking.notes}"</p>}
-              </div>
-              <div className="mt-3 flex gap-3">
-                {booking.status === 'confirmed' && (
-                  <button
-                    onClick={() => handleCancel(booking.id)}
-                    className="text-sm text-red-500 hover:text-red-700"
-                  >
-                    Cancel booking
-                  </button>
-                )}
-                {user?.role === 'student' && (booking.status === 'confirmed' || booking.status === 'completed') && !booking.has_review && (
-                  <button
-                    onClick={() => setReviewBooking(booking)}
-                    className="text-sm text-brand-600 hover:text-brand-800"
-                  >
-                    Leave a review
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
