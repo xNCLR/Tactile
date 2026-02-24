@@ -1,0 +1,91 @@
+const express = require('express');
+const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
+const { authenticate, requireRole } = require('../middleware/auth');
+
+const router = express.Router();
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// GET /api/teachers/search
+router.get('/search', async (req, res) => {
+  try {
+    const { lat, lng, radius = 10, sort = 'distance', availability } = req.query;
+    const db = await getDb();
+
+    let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
+      tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
+      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends
+      FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE u.role = 'teacher'`;
+
+    if (availability === 'weekdays') query += ' AND tp.available_weekdays = 1';
+    else if (availability === 'weekends') query += ' AND tp.available_weekends = 1';
+
+    const teachers = queryAll(db, query);
+
+    let results = teachers.map((t) => ({
+      ...t,
+      distance: lat && lng ? haversineDistance(parseFloat(lat), parseFloat(lng), t.latitude, t.longitude) : null,
+    }));
+
+    if (lat && lng && radius) {
+      results = results.filter((t) => t.distance !== null && t.distance <= parseFloat(radius));
+    }
+
+    if (sort === 'price') results.sort((a, b) => a.hourly_rate - b.hourly_rate);
+    else if (sort === 'distance' && lat && lng) results.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+
+    results = results.map((t) => ({ ...t, distance: t.distance !== null ? Math.round(t.distance * 10) / 10 : null }));
+
+    res.json({ teachers: results, total: results.length });
+  } catch (err) {
+    console.error('Search error:', err);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// GET /api/teachers/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const db = await getDb();
+    const teacher = queryOne(db, `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
+      tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
+      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends
+      FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
+
+    if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
+
+    const timeSlots = queryAll(db, `SELECT id, day_of_week, start_time, end_time, is_available FROM time_slots WHERE teacher_id = ? AND is_available = 1 ORDER BY day_of_week, start_time`, [req.params.id]);
+
+    res.json({ teacher, timeSlots });
+  } catch (err) {
+    console.error('Teacher fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch teacher' });
+  }
+});
+
+// PUT /api/teachers/profile
+router.put('/profile', authenticate, requireRole('teacher'), async (req, res) => {
+  try {
+    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends } = req.body;
+    const db = await getDb();
+
+    runSql(db, `UPDATE teacher_profiles SET bio = COALESCE(?, bio), hourly_rate = COALESCE(?, hourly_rate),
+      equipment_requirements = COALESCE(?, equipment_requirements), available_weekdays = COALESCE(?, available_weekdays),
+      available_weekends = COALESCE(?, available_weekends), updated_at = datetime('now') WHERE user_id = ?`,
+      [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, req.user.id]);
+
+    const profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    res.json({ profile });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+module.exports = router;

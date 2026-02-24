@@ -1,0 +1,162 @@
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
+const { getDb, queryOne, queryAll, runSql } = require('../db/schema');
+const { authenticate } = require('../middleware/auth');
+const { createPaymentIntent, refundPayment } = require('../services/stripe');
+const { sendBookingConfirmation, sendBookingNotification } = require('../services/email');
+
+const router = express.Router();
+
+// POST /api/bookings/create-intent — Step 1: Create payment intent + pending booking
+router.post('/create-intent', authenticate, async (req, res) => {
+  try {
+    const { teacherId, bookingDate, startTime, endTime, durationHours, notes } = req.body;
+    if (!teacherId || !bookingDate || !startTime || !endTime || !durationHours) {
+      return res.status(400).json({ error: 'Missing required booking fields' });
+    }
+
+    const db = await getDb();
+
+    const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email, u.postcode FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [teacherId]);
+    if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
+
+    const conflict = queryOne(db, `SELECT id FROM bookings WHERE teacher_id = ? AND booking_date = ? AND status != 'cancelled' AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?))`,
+      [teacherId, bookingDate, startTime, startTime, endTime, endTime]);
+    if (conflict) return res.status(409).json({ error: 'This time slot is already booked' });
+
+    const totalPrice = teacher.hourly_rate * durationHours;
+
+    // Create Stripe Payment Intent
+    const payment = await createPaymentIntent(Math.round(totalPrice * 100), 'gbp', {
+      teacherId,
+      studentId: req.user.id,
+      bookingDate,
+    });
+
+    // Create pending booking
+    const bookingId = uuidv4();
+    runSql(db, `INSERT INTO bookings (id, student_id, teacher_id, booking_date, start_time, end_time, duration_hours, total_price, status, payment_status, payment_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?)`,
+      [bookingId, req.user.id, teacherId, bookingDate, startTime, endTime, durationHours, totalPrice, payment.id, notes || null]);
+
+    res.status(201).json({
+      bookingId,
+      clientSecret: payment.client_secret,
+      totalPrice,
+      teacherName: teacher.teacher_name,
+    });
+  } catch (err) {
+    console.error('Create intent error:', err);
+    res.status(500).json({ error: 'Failed to create payment' });
+  }
+});
+
+// POST /api/bookings/confirm — Step 2: Confirm booking after successful payment
+router.post('/confirm', authenticate, async (req, res) => {
+  try {
+    const { bookingId, paymentIntentId } = req.body;
+    if (!bookingId || !paymentIntentId) {
+      return res.status(400).json({ error: 'Missing bookingId or paymentIntentId' });
+    }
+
+    const db = await getDb();
+
+    const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ? AND student_id = ?', [bookingId, req.user.id]);
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status === 'confirmed') return res.json({ booking }); // Already confirmed, idempotent
+
+    // Confirm the booking
+    runSql(db, `UPDATE bookings SET status = 'confirmed', payment_status = 'paid', updated_at = datetime('now') WHERE id = ?`, [bookingId]);
+
+    // Get details for emails
+    const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email, u.postcode FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [booking.teacher_id]);
+    const student = queryOne(db, 'SELECT * FROM users WHERE id = ?', [req.user.id]);
+
+    // Send confirmation emails
+    await sendBookingConfirmation({
+      studentEmail: student.email,
+      studentName: student.name,
+      teacherName: teacher.teacher_name,
+      date: booking.booking_date,
+      time: `${booking.start_time} - ${booking.end_time}`,
+      location: teacher.postcode,
+      amount: booking.total_price.toFixed(2),
+    });
+    await sendBookingNotification({
+      teacherEmail: teacher.teacher_email,
+      teacherName: teacher.teacher_name,
+      studentName: student.name,
+      date: booking.booking_date,
+      time: `${booking.start_time} - ${booking.end_time}`,
+    });
+
+    res.json({
+      booking: {
+        id: bookingId,
+        teacherName: teacher.teacher_name,
+        bookingDate: booking.booking_date,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        durationHours: booking.duration_hours,
+        totalPrice: booking.total_price,
+        status: 'confirmed',
+        paymentStatus: 'paid',
+      },
+    });
+  } catch (err) {
+    console.error('Confirm booking error:', err);
+    res.status(500).json({ error: 'Failed to confirm booking' });
+  }
+});
+
+// GET /api/bookings
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    let bookings;
+
+    if (req.user.role === 'student') {
+      bookings = queryAll(db, `SELECT b.*, u.name as teacher_name, u.postcode as teacher_location FROM bookings b JOIN teacher_profiles tp ON b.teacher_id = tp.id JOIN users u ON tp.user_id = u.id WHERE b.student_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [req.user.id]);
+    } else {
+      const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+      bookings = profile
+        ? queryAll(db, `SELECT b.*, u.name as student_name, u.email as student_email, u.phone as student_phone FROM bookings b JOIN users u ON b.student_id = u.id WHERE b.teacher_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [profile.id])
+        : [];
+    }
+
+    res.json({ bookings });
+  } catch (err) {
+    console.error('Bookings fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch bookings' });
+  }
+});
+
+// PATCH /api/bookings/:id/cancel
+router.patch('/:id/cancel', authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ?', [req.params.id]);
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (booking.student_id !== req.user.id && (!profile || booking.teacher_id !== profile.id)) {
+      return res.status(403).json({ error: 'Not authorized to cancel this booking' });
+    }
+
+    if (booking.payment_id && booking.payment_status === 'paid') {
+      await refundPayment(booking.payment_id);
+    }
+
+    runSql(db, `UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', updated_at = datetime('now') WHERE id = ?`, [req.params.id]);
+    res.json({ message: 'Booking cancelled and refunded' });
+  } catch (err) {
+    console.error('Cancellation error:', err);
+    res.status(500).json({ error: 'Cancellation failed' });
+  }
+});
+
+// GET /api/bookings/stripe-key — expose publishable key to frontend
+router.get('/stripe-key', (req, res) => {
+  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY });
+});
+
+module.exports = router;
