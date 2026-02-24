@@ -29,6 +29,7 @@ export default function Layout({ children }) {
             {user ? (
               <>
                 <Link to="/dashboard" className="text-gray-600 hover:text-gray-900">Dashboard</Link>
+                <Link to="/messages" className="text-gray-600 hover:text-gray-900">Messages</Link>
                 <button onClick={handleLogout} className="text-gray-500 hover:text-gray-700">Log out</button>
                 <span className="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded-full font-medium">{user.name}</span>
               </>
@@ -60,6 +61,7 @@ export default function Layout({ children }) {
               {user ? (
                 <>
                   <Link to="/dashboard" onClick={closeMenu} className="block text-sm text-gray-700 hover:text-gray-900">Dashboard</Link>
+                  <Link to="/messages" onClick={closeMenu} className="block text-sm text-gray-700 hover:text-gray-900">Messages</Link>
                   <Link to="/profile/edit" onClick={closeMenu} className="block text-sm text-gray-700 hover:text-gray-900">Edit Profile</Link>
                   <button onClick={handleLogout} className="block text-sm text-red-500 hover:text-red-700">Log out</button>
                   <div className="text-xs text-gray-400 pt-1 border-t border-gray-100">Signed in as {user.name}</div>

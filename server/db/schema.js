@@ -90,6 +90,25 @@ async function initDb() {
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS reviews (
+    id TEXT PRIMARY KEY,
+    booking_id TEXT UNIQUE NOT NULL REFERENCES bookings(id),
+    student_id TEXT NOT NULL REFERENCES users(id),
+    teacher_id TEXT NOT NULL REFERENCES teacher_profiles(id),
+    rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+    comment TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    booking_id TEXT NOT NULL REFERENCES bookings(id),
+    sender_id TEXT NOT NULL REFERENCES users(id),
+    content TEXT NOT NULL,
+    read INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

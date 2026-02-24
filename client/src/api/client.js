@@ -46,4 +46,44 @@ export const api = {
 
   // Users
   updateProfile: (data) => request('/users/profile', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Uploads
+  uploadProfilePhoto: async (file) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/uploads/profile-photo`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    return data;
+  },
+
+  uploadPortfolioPhoto: async (file) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/uploads/portfolio`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    return data;
+  },
+
+  deletePortfolioPhoto: (slot) => request(`/uploads/portfolio/${slot}`, { method: 'DELETE' }),
+
+  // Reviews
+  createReview: (data) => request('/reviews', { method: 'POST', body: JSON.stringify(data) }),
+  getTeacherReviews: (teacherId) => request(`/reviews/teacher/${teacherId}`),
+
+  // Messages
+  getThreads: () => request('/messages/threads'),
+  getMessages: (bookingId) => request(`/messages/${bookingId}`),
+  sendMessage: (bookingId, content) => request(`/messages/${bookingId}`, { method: 'POST', body: JSON.stringify({ content }) }),
 };

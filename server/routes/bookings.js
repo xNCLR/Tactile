@@ -115,7 +115,7 @@ router.get('/', authenticate, async (req, res) => {
     let bookings;
 
     if (req.user.role === 'student') {
-      bookings = queryAll(db, `SELECT b.*, u.name as teacher_name, u.postcode as teacher_location FROM bookings b JOIN teacher_profiles tp ON b.teacher_id = tp.id JOIN users u ON tp.user_id = u.id WHERE b.student_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [req.user.id]);
+      bookings = queryAll(db, `SELECT b.*, u.name as teacher_name, u.postcode as teacher_location, CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END as has_review FROM bookings b JOIN teacher_profiles tp ON b.teacher_id = tp.id JOIN users u ON tp.user_id = u.id LEFT JOIN reviews r ON r.booking_id = b.id WHERE b.student_id = ? AND b.status != 'pending' ORDER BY b.booking_date DESC, b.start_time DESC`, [req.user.id]);
     } else {
       const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
       bookings = profile

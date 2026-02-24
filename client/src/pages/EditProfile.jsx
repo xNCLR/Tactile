@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
@@ -26,6 +26,13 @@ export default function EditProfile() {
   const [timeSlots, setTimeSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
+  // Photo state
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [portfolioPhotos, setPortfolioPhotos] = useState({ photo_1: null, photo_2: null, photo_3: null });
+  const [uploadingPortfolio, setUploadingPortfolio] = useState(false);
+  const profilePhotoRef = useRef(null);
+  const portfolioPhotoRef = useRef(null);
+
   // New slot form
   const [newDay, setNewDay] = useState(1);
   const [newStart, setNewStart] = useState('09:00');
@@ -43,6 +50,11 @@ export default function EditProfile() {
       setEquipment(teacherProfile.equipment_requirements || '');
       setWeekdays(!!teacherProfile.available_weekdays);
       setWeekends(!!teacherProfile.available_weekends);
+      setPortfolioPhotos({
+        photo_1: teacherProfile.photo_1 || null,
+        photo_2: teacherProfile.photo_2 || null,
+        photo_3: teacherProfile.photo_3 || null,
+      });
       loadTimeSlots();
     }
   }, [user, teacherProfile]);
@@ -60,16 +72,54 @@ export default function EditProfile() {
     }
   };
 
+  const handleProfilePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    setError('');
+    try {
+      await api.uploadProfilePhoto(file);
+      await refreshUser();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handlePortfolioUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingPortfolio(true);
+    setError('');
+    try {
+      const result = await api.uploadPortfolioPhoto(file);
+      setPortfolioPhotos((prev) => ({ ...prev, [result.slot]: result.url }));
+      await refreshUser();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploadingPortfolio(false);
+    }
+  };
+
+  const handleDeletePortfolioPhoto = async (slot) => {
+    try {
+      await api.deletePortfolioPhoto(slot);
+      setPortfolioPhotos((prev) => ({ ...prev, [slot]: null }));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
     setSaved(false);
 
     try {
-      // Update user profile
       await api.updateProfile({ name, phone, postcode });
 
-      // Update teacher profile if teacher
       if (user.role === 'teacher') {
         await api.updateTeacherProfile({
           bio,
@@ -110,6 +160,9 @@ export default function EditProfile() {
 
   if (!user) return null;
 
+  const initials = user.name?.split(' ').map((n) => n[0]).join('').toUpperCase() || '?';
+  const profilePhotoUrl = user.profilePhoto || user.profile_photo;
+
   return (
     <div className="max-w-xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -121,6 +174,37 @@ export default function EditProfile() {
 
       {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</div>}
       {saved && <div className="bg-green-50 text-green-600 text-sm p-3 rounded-lg mb-4">Profile saved!</div>}
+
+      {/* Profile Photo */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <h2 className="font-semibold mb-4">Profile Photo</h2>
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+            {profilePhotoUrl ? (
+              <img src={profilePhotoUrl} alt={user.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-2xl font-bold text-brand-500">{initials}</span>
+            )}
+          </div>
+          <div>
+            <input
+              ref={profilePhotoRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleProfilePhotoUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => profilePhotoRef.current?.click()}
+              disabled={uploadingPhoto}
+              className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-50"
+            >
+              {uploadingPhoto ? 'Uploading...' : profilePhotoUrl ? 'Change Photo' : 'Upload Photo'}
+            </button>
+            <p className="text-xs text-gray-400 mt-1">JPG, PNG or WebP. Max 5MB.</p>
+          </div>
+        </div>
+      </div>
 
       {/* Basic info */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
@@ -184,6 +268,55 @@ export default function EditProfile() {
                 </label>
               </div>
             </div>
+          </div>
+
+          {/* Portfolio Photos */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+            <h2 className="font-semibold mb-1">Portfolio Photos</h2>
+            <p className="text-sm text-gray-400 mb-4">Show off your best work. Up to 3 photos.</p>
+
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              {['photo_1', 'photo_2', 'photo_3'].map((slot) => (
+                <div key={slot} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                  {portfolioPhotos[slot] ? (
+                    <>
+                      <img src={portfolioPhotos[slot]} alt="Portfolio" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => handleDeletePortfolioPhoto(slot)}
+                        className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-xs hover:bg-black/80"
+                      >
+                        ×
+                      </button>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-300">
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {Object.values(portfolioPhotos).some((p) => !p) && (
+              <>
+                <input
+                  ref={portfolioPhotoRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handlePortfolioUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => portfolioPhotoRef.current?.click()}
+                  disabled={uploadingPortfolio}
+                  className="text-sm bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                >
+                  {uploadingPortfolio ? 'Uploading...' : 'Add Photo'}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Time slots */}

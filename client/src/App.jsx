@@ -11,6 +11,7 @@ import EditProfile from './pages/EditProfile';
 import BookingConfirmation from './pages/BookingConfirmation';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import Messages from './pages/Messages';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -43,6 +44,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <EditProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <ProtectedRoute>
+              <Messages />
             </ProtectedRoute>
           }
         />

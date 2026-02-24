@@ -20,7 +20,9 @@ router.get('/search', async (req, res) => {
 
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
-      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends
+      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends,
+      (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.teacher_id = tp.id) as avg_rating,
+      (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE u.role = 'teacher'`;
 
     if (availability === 'weekdays') query += ' AND tp.available_weekdays = 1';
