@@ -6,7 +6,7 @@ const { createPaymentIntent, refundPayment } = require('../services/stripe');
 const { sendBookingConfirmation, sendBookingNotification, sendBookingAcceptedEmail, sendBookingDeclinedEmail } = require('../services/email');
 const { createNotification } = require('../lib/notifications');
 const logger = require('../lib/logger');
-const { validate, createIntentSchema, updateMeetingPointSchema } = require('../lib/validators');
+const { validate, createIntentSchema, updateMeetingPointSchema, createRecurringIntentSchema } = require('../lib/validators');
 
 const router = express.Router();
 
@@ -53,6 +53,67 @@ router.post('/create-intent', authenticate, validate(createIntentSchema), async 
   }
 });
 
+// POST /api/bookings/create-recurring-intent — Create multiple recurring bookings
+router.post('/create-recurring-intent', authenticate, validate(createRecurringIntentSchema), async (req, res) => {
+  try {
+    const { teacherId, startTime, endTime, durationHours, dayOfWeek, weeks = 4, notes, meetingPoint } = req.validated;
+
+    const db = await getDb();
+    const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [teacherId]);
+    if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
+
+    const totalPerLesson = teacher.hourly_rate * durationHours;
+    const totalPrice = totalPerLesson * weeks;
+
+    // Generate dates for the next N weeks on the given day
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i < weeks; i++) {
+      const d = new Date(today);
+      const diff = ((dayOfWeek - d.getDay()) + 7) % 7 || 7;
+      d.setDate(d.getDate() + diff + (i * 7));
+      dates.push(d.toISOString().split('T')[0]);
+    }
+
+    // Check for conflicts on all dates
+    for (const date of dates) {
+      const conflict = queryOne(db, `SELECT id FROM bookings WHERE teacher_id = ? AND booking_date = ? AND status != 'cancelled' AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?))`,
+        [teacherId, date, startTime, startTime, endTime, endTime]);
+      if (conflict) return res.status(409).json({ error: `Time slot conflict on ${date}` });
+    }
+
+    // Create Stripe payment intent for the total
+    const payment = await createPaymentIntent(Math.round(totalPrice * 100), 'gbp', {
+      teacherId, studentId: req.user.id, recurring: true, weeks,
+    });
+
+    // Create all bookings with a shared recurring_group_id
+    const recurringGroupId = uuidv4();
+    const bookingIds = [];
+
+    for (const date of dates) {
+      const bookingId = uuidv4();
+      bookingIds.push(bookingId);
+      runSql(db, `INSERT INTO bookings (id, student_id, teacher_id, booking_date, start_time, end_time, duration_hours, total_price, status, payment_status, payment_id, notes, meeting_point, recurring_group_id, is_recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?, ?, 1)`,
+        [bookingId, req.user.id, teacherId, date, startTime, endTime, durationHours, totalPerLesson, payment.id, notes || null, meetingPoint || null, recurringGroupId]);
+    }
+
+    res.status(201).json({
+      recurringGroupId,
+      bookingIds,
+      clientSecret: payment.client_secret,
+      totalPrice,
+      perLesson: totalPerLesson,
+      weeks,
+      dates,
+      teacherName: teacher.teacher_name,
+    });
+  } catch (err) {
+    logger.error('Create recurring intent error:', err);
+    res.status(500).json({ error: 'Failed to create recurring booking' });
+  }
+});
+
 // POST /api/bookings/confirm — Step 2: Confirm booking after successful payment
 router.post('/confirm', authenticate, async (req, res) => {
   try {
@@ -68,7 +129,12 @@ router.post('/confirm', authenticate, async (req, res) => {
     if (booking.status === 'confirmed') return res.json({ booking }); // Already confirmed, idempotent
 
     // Confirm the booking — set to awaiting_teacher until teacher accepts
-    runSql(db, `UPDATE bookings SET status = 'awaiting_teacher', payment_status = 'paid', updated_at = datetime('now') WHERE id = ?`, [bookingId]);
+    // If recurring, update all bookings in the group
+    if (booking.recurring_group_id) {
+      runSql(db, `UPDATE bookings SET status = 'awaiting_teacher', payment_status = 'paid', updated_at = datetime('now') WHERE recurring_group_id = ?`, [booking.recurring_group_id]);
+    } else {
+      runSql(db, `UPDATE bookings SET status = 'awaiting_teacher', payment_status = 'paid', updated_at = datetime('now') WHERE id = ?`, [bookingId]);
+    }
 
     // Get details for emails
     const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email, u.postcode FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [booking.teacher_id]);
@@ -242,6 +308,40 @@ router.patch('/:id/decline', authenticate, async (req, res) => {
   } catch (err) {
     logger.error('Decline booking error:', err);
     res.status(500).json({ error: 'Failed to decline booking' });
+  }
+});
+
+// PATCH /api/bookings/recurring/:groupId/cancel-all — cancel all future bookings in a series
+router.patch('/recurring/:groupId/cancel-all', authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const today = new Date().toISOString().split('T')[0];
+
+    const bookings = queryAll(db,
+      `SELECT * FROM bookings WHERE recurring_group_id = ? AND booking_date >= ? AND status NOT IN ('cancelled', 'completed')`,
+      [req.params.groupId, today]);
+
+    if (bookings.length === 0) return res.status(404).json({ error: 'No cancellable bookings found' });
+
+    // Verify authorization
+    const first = bookings[0];
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (first.student_id !== req.user.id && (!profile || first.teacher_id !== profile.id)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    let refunded = 0;
+    for (const b of bookings) {
+      if (b.payment_id && b.payment_status === 'paid') {
+        try { await refundPayment(b.payment_id); refunded++; } catch (err) { logger.error('Refund error for recurring:', err); }
+      }
+      runSql(db, `UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', updated_at = datetime('now') WHERE id = ?`, [b.id]);
+    }
+
+    res.json({ message: `${bookings.length} bookings cancelled, ${refunded} refunded` });
+  } catch (err) {
+    logger.error('Cancel recurring error:', err);
+    res.status(500).json({ error: 'Failed to cancel series' });
   }
 });
 

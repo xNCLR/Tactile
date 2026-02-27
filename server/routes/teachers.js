@@ -35,7 +35,7 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends,
-      tp.search_radius_km,
+      tp.search_radius_km, tp.verification_status,
       (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.teacher_id = tp.id) as avg_rating,
       (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
@@ -91,7 +91,7 @@ router.get('/:id', async (req, res) => {
     const teacher = queryOne(db, `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km,
-      tp.cancellation_hours,
+      tp.cancellation_hours, tp.verification_status,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
       (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);

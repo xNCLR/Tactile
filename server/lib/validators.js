@@ -84,6 +84,19 @@ const updateMeetingPointSchema = z.object({
   meetingPoint: z.string().min(1).max(200).trim(),
 });
 
+// ── Recurring booking schema ──
+
+const createRecurringIntentSchema = z.object({
+  teacherId: z.string().uuid(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format: HH:MM'),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format: HH:MM'),
+  durationHours: z.number().min(0.5).max(8),
+  dayOfWeek: z.number().int().min(0).max(6),
+  weeks: z.number().int().min(2).max(12).default(4),
+  notes: z.string().max(500).optional(),
+  meetingPoint: z.string().max(200).optional(),
+});
+
 // ── Review schemas ──
 
 const createReviewSchema = z.object({
@@ -154,6 +167,7 @@ module.exports = {
   addTimeSlotSchema,
   createIntentSchema,
   updateMeetingPointSchema,
+  createRecurringIntentSchema,
   bookingAcceptSchema,
   bookingDeclineSchema,
   createReviewSchema,

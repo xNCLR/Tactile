@@ -85,6 +85,9 @@ async function initDb() {
     available_weekends INTEGER DEFAULT 1,
     search_radius_km INTEGER DEFAULT 10,
     cancellation_hours INTEGER DEFAULT 24,
+    verification_status TEXT DEFAULT 'unverified' CHECK(verification_status IN ('unverified', 'pending', 'verified', 'rejected')),
+    portfolio_url TEXT,
+    verification_notes TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
@@ -124,6 +127,8 @@ async function initDb() {
     payment_id TEXT,
     notes TEXT,
     meeting_point TEXT,
+    recurring_group_id TEXT,
+    is_recurring INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
@@ -190,6 +195,7 @@ async function initDb() {
   db.run('CREATE INDEX IF NOT EXISTS idx_bookings_teacher_id ON bookings(teacher_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(booking_date)');
   db.run('CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_bookings_recurring_group ON bookings(recurring_group_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_reviews_teacher_id ON reviews(teacher_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_reviews_student_id ON reviews(student_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_messages_booking_id ON messages(booking_id)');

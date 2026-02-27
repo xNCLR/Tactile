@@ -84,6 +84,8 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
   const [notes, setNotes] = useState('');
   const [meetingPoint, setMeetingPoint] = useState('');
   const [error, setError] = useState('');
+  const [recurring, setRecurring] = useState(false);
+  const [weeks, setWeeks] = useState(4);
 
   // Stripe payment state
   const [step, setStep] = useState('details'); // 'details' | 'payment'
@@ -99,7 +101,8 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
     return next.toISOString().split('T')[0];
   }
 
-  const totalPrice = (teacher.hourly_rate * duration).toFixed(2);
+  const perLesson = (teacher.hourly_rate * duration).toFixed(2);
+  const totalPrice = recurring ? (perLesson * weeks).toFixed(2) : perLesson;
 
   const handleProceedToPayment = async () => {
     if (!user) { navigate('/login'); return; }
@@ -116,19 +119,35 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
       const endH = startH + duration;
       const endTime = `${String(endH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`;
 
-      const data = await api.createPaymentIntent({
-        teacherId: teacher.profile_id,
-        bookingDate: selectedDate,
-        startTime: selectedSlot.start_time,
-        endTime,
-        durationHours: duration,
-        notes,
-        meetingPoint: meetingPoint.trim() || undefined,
-      });
+      if (recurring) {
+        const data = await api.createRecurringIntent({
+          teacherId: teacher.profile_id,
+          startTime: selectedSlot.start_time,
+          endTime,
+          durationHours: duration,
+          dayOfWeek: selectedSlot.day_of_week,
+          weeks,
+          notes,
+          meetingPoint: meetingPoint.trim() || undefined,
+        });
+        setClientSecret(data.clientSecret);
+        setBookingId(data.bookingIds[0]);
+        setStep('payment');
+      } else {
+        const data = await api.createPaymentIntent({
+          teacherId: teacher.profile_id,
+          bookingDate: selectedDate,
+          startTime: selectedSlot.start_time,
+          endTime,
+          durationHours: duration,
+          notes,
+          meetingPoint: meetingPoint.trim() || undefined,
+        });
 
-      setClientSecret(data.clientSecret);
-      setBookingId(data.bookingId);
-      setStep('payment');
+        setClientSecret(data.clientSecret);
+        setBookingId(data.bookingId);
+        setStep('payment');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -203,6 +222,26 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
               </select>
             </div>
 
+            <div className="mb-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)}
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                Book weekly (recurring)
+              </label>
+            </div>
+
+            {recurring && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Number of weeks</label>
+                <select value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                  {[2,3,4,5,6,8,10,12].map(w => (
+                    <option key={w} value={w}>{w} weeks</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
@@ -218,6 +257,11 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
             </div>
 
             <div className="border-t border-gray-100 pt-4">
+              {recurring && (
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-gray-500">{weeks} × £{perLesson}/lesson</span>
+                </div>
+              )}
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm text-gray-600">Total</span>
                 <span className="text-lg font-semibold">£{totalPrice}</span>

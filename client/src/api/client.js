@@ -45,6 +45,10 @@ export const api = {
   cancelBooking: (id) => request(`/bookings/${id}/cancel`, { method: 'PATCH' }),
   getRebookSuggestions: () => request('/bookings/rebook-suggestions'),
 
+  // Recurring bookings
+  createRecurringIntent: (data) => request('/bookings/create-recurring-intent', { method: 'POST', body: JSON.stringify(data) }),
+  cancelRecurringSeries: (groupId) => request(`/bookings/recurring/${groupId}/cancel-all`, { method: 'PATCH' }),
+
   // Users
   updateProfile: (data) => request('/users/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
@@ -117,4 +121,8 @@ export const api = {
 
   // Meeting point
   updateMeetingPoint: (bookingId, meetingPoint) => request(`/bookings/${bookingId}/meeting-point`, { method: 'PATCH', body: JSON.stringify({ meetingPoint }) }),
+
+  // Verification
+  submitVerification: (data) => request('/verification/submit', { method: 'POST', body: JSON.stringify(data) }),
+  getVerificationStatus: () => request('/verification/status'),
 };

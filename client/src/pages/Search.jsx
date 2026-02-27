@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import TeacherCard from '../components/TeacherCard';
+import usePageMeta from '../hooks/usePageMeta';
 
 export default function Search() {
+  usePageMeta({
+    title: 'Find Photography Teachers',
+    description: 'Browse photography teachers in London. Filter by specialties, availability, and location. Book your lesson today.',
+  });
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

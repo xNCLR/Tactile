@@ -5,6 +5,45 @@ import { api } from '../api/client';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+function VerificationForm() {
+  const [portfolioUrl, setPortfolioUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!portfolioUrl.trim()) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      await api.submitVerification({ portfolioUrl });
+      setSubmitted(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) return <p className="text-sm text-green-600">Submitted for review!</p>;
+
+  return (
+    <div>
+      <p className="text-sm text-gray-500 mb-3">Get a verified badge by sharing a link to your portfolio or professional website.</p>
+      {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
+      <div className="flex gap-2">
+        <input type="url" value={portfolioUrl} onChange={(e) => setPortfolioUrl(e.target.value)}
+          placeholder="https://your-portfolio.com"
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        <button onClick={handleSubmit} disabled={submitting || !portfolioUrl.trim()}
+          className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+          {submitting ? 'Submitting...' : 'Submit'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function EditProfile() {
   const { user, teacherProfile, refreshUser } = useAuth();
   const navigate = useNavigate();
@@ -343,6 +382,30 @@ export default function EditProfile() {
               </div>
             </div>
           </div>
+
+          {/* Verification */}
+          {teacherProfile && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+              <h2 className="font-semibold mb-2">Verification</h2>
+              {teacherProfile.verification_status === 'verified' ? (
+                <div className="flex items-center gap-2 text-green-600">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm font-medium">Verified Teacher</span>
+                </div>
+              ) : teacherProfile.verification_status === 'pending' ? (
+                <div className="flex items-center gap-2 text-orange-500">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-medium">Verification Pending</span>
+                </div>
+              ) : (
+                <VerificationForm />
+              )}
+            </div>
+          )}
 
           {/* Portfolio Photos */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">

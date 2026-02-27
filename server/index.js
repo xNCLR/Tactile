@@ -18,6 +18,7 @@ const disputeRoutes = require('./routes/disputes');
 const badgeRoutes = require('./routes/badges');
 const notificationRoutes = require('./routes/notifications');
 const earningsRoutes = require('./routes/earnings');
+const verificationRoutes = require('./routes/verification');
 const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
@@ -89,9 +90,30 @@ app.use('/api/disputes', disputeRoutes);
 app.use('/api/badges', badgeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/earnings', earningsRoutes);
+app.use('/api/verification', verificationRoutes);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Social sharing metadata endpoint
+app.get('/api/meta/teacher/:id', async (req, res) => {
+  try {
+    const { getDb, queryOne } = require('./db/schema');
+    const db = await getDb();
+    const teacher = queryOne(db, `SELECT u.name, u.postcode, tp.bio, tp.hourly_rate, tp.verification_status
+      FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [req.params.id]);
+
+    if (!teacher) return res.status(404).json({});
+
+    res.json({
+      title: `${teacher.name} — Photography Teacher on Tactile`,
+      description: teacher.bio || `Book a photography lesson with ${teacher.name} in ${teacher.postcode}. From £${teacher.hourly_rate}/hr.`,
+      url: `/teacher/${req.params.id}`,
+    });
+  } catch (err) {
+    res.json({});
+  }
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

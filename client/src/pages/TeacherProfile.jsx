@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import BookingModal from '../components/BookingModal';
 import CalendarView from '../components/CalendarView';
+import usePageMeta from '../hooks/usePageMeta';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -79,6 +80,11 @@ export default function TeacherProfile() {
   const [showBooking, setShowBooking] = useState(false);
   const [showInquiry, setShowInquiry] = useState(false);
 
+  usePageMeta({
+    title: teacher ? teacher.name + ' — Photography Teacher' : 'Teacher',
+    description: teacher?.bio || 'Book a photography lesson with a local teacher in London.',
+  });
+
   useEffect(() => {
     api.getTeacher(id)
       .then((data) => {
@@ -115,7 +121,14 @@ export default function TeacherProfile() {
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-2xl font-bold">{teacher.name}</h1>
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-2xl font-bold">{teacher.name}</h1>
+                {teacher.verification_status === 'verified' && (
+                  <svg className="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 20 20" title="Verified Teacher">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
               <p className="text-gray-500">{teacher.postcode}</p>
               {reviewStats.average && (
                 <div className="flex items-center gap-2 mt-1">

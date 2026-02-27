@@ -1,8 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import usePageMeta from '../hooks/usePageMeta';
 
 export default function Home() {
   const { user } = useAuth();
+
+  usePageMeta({
+    title: 'In-person Photography Lessons in London',
+    description: 'Find local photography teachers for hands-on lessons. Portrait, street, landscape, and more. Book your first lesson today.',
+  });
 
   return (
     <div>
