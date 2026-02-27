@@ -11,6 +11,8 @@ const userRoutes = require('./routes/users');
 const uploadRoutes = require('./routes/uploads');
 const reviewRoutes = require('./routes/reviews');
 const messageRoutes = require('./routes/messages');
+const disputeRoutes = require('./routes/disputes');
+const badgeRoutes = require('./routes/badges');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,6 +27,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/disputes', disputeRoutes);
+app.use('/api/badges', badgeRoutes);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

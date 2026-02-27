@@ -24,6 +24,7 @@ export default function EditProfile() {
   const [equipment, setEquipment] = useState('');
   const [weekdays, setWeekdays] = useState(true);
   const [weekends, setWeekends] = useState(true);
+  const [travelRadius, setTravelRadius] = useState(10);
   const [timeSlots, setTimeSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
@@ -52,6 +53,7 @@ export default function EditProfile() {
       setEquipment(teacherProfile.equipment_requirements || '');
       setWeekdays(!!teacherProfile.available_weekdays);
       setWeekends(!!teacherProfile.available_weekends);
+      setTravelRadius(teacherProfile.search_radius_km || 10);
       setPortfolioPhotos({
         photo_1: teacherProfile.photo_1 || null,
         photo_2: teacherProfile.photo_2 || null,
@@ -130,6 +132,7 @@ export default function EditProfile() {
           equipmentRequirements: equipment,
           availableWeekdays: weekdays,
           availableWeekends: weekends,
+          searchRadiusKm: parseInt(travelRadius),
         });
       }
 
@@ -280,6 +283,25 @@ export default function EditProfile() {
                     className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
                   Available weekends
                 </label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Travel Radius: {travelRadius} km
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  value={travelRadius}
+                  onChange={(e) => setTravelRadius(e.target.value)}
+                  className="w-full accent-brand-600"
+                />
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>1 km</span>
+                  <span>25 km</span>
+                  <span>50 km</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">How far you're willing to travel to meet students.</p>
               </div>
             </div>
           </div>

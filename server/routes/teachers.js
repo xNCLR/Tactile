@@ -21,6 +21,7 @@ router.get('/search', async (req, res) => {
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends,
+      tp.search_radius_km,
       (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.teacher_id = tp.id) as avg_rating,
       (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE 1=1`;
@@ -36,7 +37,12 @@ router.get('/search', async (req, res) => {
     }));
 
     if (lat && lng && radius) {
-      results = results.filter((t) => t.distance !== null && t.distance <= parseFloat(radius));
+      const searchRadius = parseFloat(radius);
+      results = results.filter((t) => {
+        if (t.distance === null) return false;
+        // Show teacher if within student's search radius OR within teacher's travel radius
+        return t.distance <= searchRadius || t.distance <= (t.search_radius_km || 10);
+      });
     }
 
     if (sort === 'price') results.sort((a, b) => a.hourly_rate - b.hourly_rate);
@@ -57,7 +63,7 @@ router.get('/:id', async (req, res) => {
     const db = await getDb();
     const teacher = queryOne(db, `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
-      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends
+      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
 
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
@@ -74,7 +80,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/teachers/profile — create or update teacher profile
 router.put('/profile', authenticate, async (req, res) => {
   try {
-    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends } = req.body;
+    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm } = req.body;
     const db = await getDb();
 
     let profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
@@ -83,14 +89,15 @@ router.put('/profile', authenticate, async (req, res) => {
       // Update existing
       runSql(db, `UPDATE teacher_profiles SET bio = COALESCE(?, bio), hourly_rate = COALESCE(?, hourly_rate),
         equipment_requirements = COALESCE(?, equipment_requirements), available_weekdays = COALESCE(?, available_weekdays),
-        available_weekends = COALESCE(?, available_weekends), updated_at = datetime('now') WHERE user_id = ?`,
-        [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, req.user.id]);
+        available_weekends = COALESCE(?, available_weekends), search_radius_km = COALESCE(?, search_radius_km),
+        updated_at = datetime('now') WHERE user_id = ?`,
+        [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, searchRadiusKm || null, req.user.id]);
     } else {
       // Create new teacher profile
       const { v4: uuidv4 } = require('uuid');
       const profileId = uuidv4();
-      runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1]);
+      runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1, searchRadiusKm || 10]);
     }
 
     profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);

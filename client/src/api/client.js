@@ -86,4 +86,12 @@ export const api = {
   getThreads: () => request('/messages/threads'),
   getMessages: (bookingId) => request(`/messages/${bookingId}`),
   sendMessage: (bookingId, content) => request(`/messages/${bookingId}`, { method: 'POST', body: JSON.stringify({ content }) }),
+
+  // Disputes
+  createDispute: (data) => request('/disputes', { method: 'POST', body: JSON.stringify(data) }),
+  respondToDispute: (id, data) => request(`/disputes/${id}/respond`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getDisputes: () => request('/disputes'),
+
+  // Badges
+  getBadges: (userId) => request(`/badges/${userId}`),
 };

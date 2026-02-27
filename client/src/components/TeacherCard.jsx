@@ -53,6 +53,9 @@ export default function TeacherCard({ teacher }) {
           {teacher.available_weekends === 1 && (
             <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">Weekends</span>
           )}
+          {teacher.search_radius_km > 5 && (
+            <span className="bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">Travels {teacher.search_radius_km} km</span>
+          )}
         </div>
       </div>
     </Link>

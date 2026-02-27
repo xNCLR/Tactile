@@ -3,6 +3,113 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
 
+const BADGE_ICONS = {
+  camera: '\u{1F4F7}', star: '\u{2B50}', trophy: '\u{1F3C6}', message: '\u{1F4AC}', megaphone: '\u{1F4E3}',
+  mortarboard: '\u{1F393}', sparkles: '\u{2728}', fire: '\u{1F525}', crown: '\u{1F451}', image: '\u{1F5BC}',
+};
+
+function DisputeModal({ booking, onClose, onSubmit }) {
+  const [reason, setReason] = useState('');
+  const [refundType, setRefundType] = useState('full');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!reason.trim()) { setError('Please describe the issue'); return; }
+    setSubmitting(true);
+    setError('');
+    try {
+      await api.createDispute({ bookingId: booking.id, reason: reason.trim(), refundType });
+      onSubmit();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold mb-1">Report a Problem</h2>
+        <p className="text-sm text-gray-500 mb-4">Describe the issue with your booking.</p>
+        {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">What happened?</label>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
+            placeholder="Describe the issue..."
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Refund requested</label>
+          <div className="flex gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="refundType" value="full" checked={refundType === 'full'} onChange={() => setRefundType('full')}
+                className="text-brand-600 focus:ring-brand-500" />
+              Full refund
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="refundType" value="partial" checked={refundType === 'partial'} onChange={() => setRefundType('partial')}
+                className="text-brand-600 focus:ring-brand-500" />
+              Partial refund
+            </label>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50">
+            {submitting ? 'Submitting...' : 'Submit'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DisputeResponseModal({ dispute, onClose, onSubmit }) {
+  const [response, setResponse] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleRespond = async (action) => {
+    setSubmitting(true);
+    setError('');
+    try {
+      await api.respondToDispute(dispute.id, { action, response: response.trim() || undefined });
+      onSubmit();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold mb-1">Respond to Dispute</h2>
+        <p className="text-sm text-gray-500 mb-2">Student requested a {dispute.refund_type} refund:</p>
+        <p className="text-sm bg-gray-50 p-3 rounded-lg mb-4 italic">&ldquo;{dispute.reason}&rdquo;</p>
+        {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Your response (optional)</label>
+          <textarea value={response} onChange={(e) => setResponse(e.target.value)} rows={2}
+            placeholder="Add a note..."
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+          <button onClick={() => handleRespond('decline')} disabled={submitting}
+            className="flex-1 text-sm bg-gray-900 text-white py-2.5 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50">Decline</button>
+          <button onClick={() => handleRespond('accept')} disabled={submitting}
+            className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50">Accept Refund</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReviewModal({ booking, onClose, onSubmit }) {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
@@ -69,13 +176,30 @@ export default function Dashboard() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reviewBooking, setReviewBooking] = useState(null);
+  const [disputeBooking, setDisputeBooking] = useState(null);
+  const [respondDispute, setRespondDispute] = useState(null);
+  const [disputes, setDisputes] = useState({ asStudent: [], asTeacher: [] });
+  const [badges, setBadges] = useState([]);
+  const [nextBadges, setNextBadges] = useState([]);
 
-  useEffect(() => {
+  const loadData = () => {
     api.getBookings()
       .then((data) => setBookings(data.bookings))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+    api.getDisputes()
+      .then((data) => setDisputes(data))
+      .catch(console.error);
+  };
+
+  useEffect(() => {
+    loadData();
+    if (user?.id) {
+      api.getBadges(user.id)
+        .then((data) => { setBadges(data.badges); setNextBadges(data.nextBadges); })
+        .catch(console.error);
+    }
+  }, [user?.id]);
 
   const handleCancel = async (bookingId) => {
     if (!confirm('Cancel this booking? A refund will be processed.')) return;
@@ -90,6 +214,23 @@ export default function Dashboard() {
   const handleReviewSubmitted = () => {
     setReviewBooking(null);
     setBookings((prev) => prev.map((b) => (b.id === reviewBooking?.id ? { ...b, status: 'completed', has_review: 1 } : b)));
+    // Refresh badges after review
+    if (user?.id) api.getBadges(user.id).then((data) => { setBadges(data.badges); setNextBadges(data.nextBadges); }).catch(() => {});
+  };
+
+  const handleDisputeSubmitted = () => {
+    setDisputeBooking(null);
+    loadData();
+  };
+
+  const handleDisputeResponded = () => {
+    setRespondDispute(null);
+    loadData();
+  };
+
+  // Check if a booking already has a dispute
+  const bookingHasDispute = (bookingId) => {
+    return [...disputes.asStudent, ...disputes.asTeacher].some((d) => d.booking_id === bookingId);
   };
 
   const statusColor = {
@@ -202,10 +343,74 @@ export default function Dashboard() {
                       Leave a review
                     </button>
                   )}
+                  {isMyStudentBooking && ['confirmed', 'completed'].includes(booking.status) && !bookingHasDispute(booking.id) && (
+                    <button
+                      onClick={() => setDisputeBooking(booking)}
+                      className="text-sm text-gray-400 hover:text-red-600"
+                    >
+                      Report a problem
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Disputes Section — teacher view */}
+      {disputes.asTeacher.filter((d) => d.status === 'open').length > 0 && (
+        <>
+          <h2 className="font-semibold mt-8 mb-4 text-red-600">Open Disputes</h2>
+          <div className="space-y-3">
+            {disputes.asTeacher.filter((d) => d.status === 'open').map((dispute) => (
+              <div key={dispute.id} className="bg-red-50 rounded-xl border border-red-200 p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <span className="font-medium">{dispute.student_name}</span>
+                    <span className="text-xs text-red-500 ml-2">{dispute.refund_type} refund requested</span>
+                  </div>
+                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">open</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-2 italic">&ldquo;{dispute.reason}&rdquo;</p>
+                <p className="text-xs text-gray-400 mb-3">{dispute.booking_date} &middot; {dispute.start_time}</p>
+                <button
+                  onClick={() => setRespondDispute(dispute)}
+                  className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-gray-800"
+                >
+                  Respond
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Badges Section */}
+      {badges.length > 0 && (
+        <>
+          <h2 className="font-semibold mt-8 mb-4">Your Badges</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
+            {badges.map((badge) => (
+              <div key={badge.id} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                <div className="text-2xl mb-1">{BADGE_ICONS[badge.icon] || '\u{1F3C5}'}</div>
+                <p className="text-sm font-medium">{badge.name}</p>
+                <p className="text-xs text-gray-400">{badge.desc}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {nextBadges.length > 0 && (
+        <div className="mt-3 mb-6">
+          <p className="text-xs text-gray-400 mb-2">Up next:</p>
+          <div className="flex flex-wrap gap-2">
+            {nextBadges.map((badge) => (
+              <span key={badge.id} className="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+                {BADGE_ICONS[badge.icon] || '\u{1F3C5}'} {badge.name}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -214,6 +419,20 @@ export default function Dashboard() {
           booking={reviewBooking}
           onClose={() => setReviewBooking(null)}
           onSubmit={handleReviewSubmitted}
+        />
+      )}
+      {disputeBooking && (
+        <DisputeModal
+          booking={disputeBooking}
+          onClose={() => setDisputeBooking(null)}
+          onSubmit={handleDisputeSubmitted}
+        />
+      )}
+      {respondDispute && (
+        <DisputeResponseModal
+          dispute={respondDispute}
+          onClose={() => setRespondDispute(null)}
+          onSubmit={handleDisputeResponded}
         />
       )}
     </div>

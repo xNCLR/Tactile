@@ -87,12 +87,15 @@ export default function TeacherProfile() {
             </div>
           )}
 
-          <div className="flex gap-2 mb-6">
+          <div className="flex flex-wrap gap-2 mb-6">
             {teacher.available_weekdays === 1 && (
               <span className="bg-green-50 text-green-600 text-sm px-3 py-1 rounded-full">Available weekdays</span>
             )}
             {teacher.available_weekends === 1 && (
               <span className="bg-blue-50 text-blue-600 text-sm px-3 py-1 rounded-full">Available weekends</span>
+            )}
+            {teacher.search_radius_km > 0 && (
+              <span className="bg-purple-50 text-purple-600 text-sm px-3 py-1 rounded-full">Travels up to {teacher.search_radius_km} km</span>
             )}
           </div>
 

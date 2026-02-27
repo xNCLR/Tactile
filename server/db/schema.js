@@ -109,6 +109,20 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS disputes (
+    id TEXT PRIMARY KEY,
+    booking_id TEXT UNIQUE NOT NULL REFERENCES bookings(id),
+    raised_by TEXT NOT NULL REFERENCES users(id),
+    reason TEXT NOT NULL,
+    refund_type TEXT NOT NULL CHECK(refund_type IN ('full', 'partial')),
+    status TEXT DEFAULT 'open' CHECK(status IN ('open', 'accepted', 'declined', 'escalated')),
+    teacher_response TEXT,
+    resolved_at TEXT,
+    escalated_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
