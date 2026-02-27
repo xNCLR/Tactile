@@ -84,8 +84,21 @@ async function initDb() {
     available_weekdays INTEGER DEFAULT 1,
     available_weekends INTEGER DEFAULT 1,
     search_radius_km INTEGER DEFAULT 10,
+    cancellation_hours INTEGER DEFAULT 24,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    slug TEXT UNIQUE NOT NULL
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS teacher_categories (
+    teacher_id TEXT NOT NULL REFERENCES teacher_profiles(id) ON DELETE CASCADE,
+    category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    PRIMARY KEY (teacher_id, category_id)
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS time_slots (
@@ -106,7 +119,7 @@ async function initDb() {
     end_time TEXT NOT NULL,
     duration_hours REAL NOT NULL,
     total_price REAL NOT NULL,
-    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'confirmed', 'cancelled', 'completed')),
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'awaiting_teacher', 'confirmed', 'declined', 'cancelled', 'completed')),
     payment_status TEXT DEFAULT 'pending' CHECK(payment_status IN ('pending', 'paid', 'refunded')),
     payment_id TEXT,
     notes TEXT,
@@ -126,7 +139,8 @@ async function initDb() {
 
   db.run(`CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
-    booking_id TEXT NOT NULL REFERENCES bookings(id),
+    booking_id TEXT REFERENCES bookings(id),
+    teacher_profile_id TEXT REFERENCES teacher_profiles(id),
     sender_id TEXT NOT NULL REFERENCES users(id),
     content TEXT NOT NULL,
     read INTEGER DEFAULT 0,
@@ -170,6 +184,9 @@ async function initDb() {
   db.run('CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)');
   db.run('CREATE INDEX IF NOT EXISTS idx_disputes_booking_id ON disputes(booking_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_teacher_categories_teacher ON teacher_categories(teacher_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_teacher_categories_category ON teacher_categories(category_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_messages_teacher_profile ON messages(teacher_profile_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)');
 

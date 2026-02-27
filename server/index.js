@@ -16,6 +16,7 @@ const reviewRoutes = require('./routes/reviews');
 const messageRoutes = require('./routes/messages');
 const disputeRoutes = require('./routes/disputes');
 const badgeRoutes = require('./routes/badges');
+const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 
@@ -29,6 +30,9 @@ app.use(cors({
   origin: config.CLIENT_URL,
   credentials: true,
 }));
+
+// ── Webhook routes (BEFORE JSON middleware for Stripe signature verification) ──
+app.use('/api/webhooks', webhookRoutes);
 
 app.use(express.json({ limit: '1mb' }));
 

@@ -40,7 +40,7 @@ function ThreadList({ threads, activeId, onSelect }) {
                 )}
               </div>
               <p className="text-xs text-gray-400 truncate">
-                {thread.last_message || `Lesson on ${thread.booking_date}`}
+                {thread.type === 'inquiry' ? 'Inquiry' : (thread.last_message || `Lesson on ${thread.booking_date}`)}
               </p>
             </div>
           </div>
@@ -128,7 +128,9 @@ function ChatView({ bookingId, currentUserId }) {
         </div>
         <div>
           <p className="font-medium text-sm">{otherUser?.name}</p>
-          <p className="text-xs text-gray-400">Lesson on {bookingInfo?.date} at {bookingInfo?.time}</p>
+          <p className="text-xs text-gray-400">
+            {bookingInfo?.type === 'inquiry' ? 'Inquiry' : `Lesson on ${bookingInfo?.date} at ${bookingInfo?.time}`}
+          </p>
         </div>
       </div>
 

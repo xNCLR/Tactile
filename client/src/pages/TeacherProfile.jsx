@@ -18,6 +18,56 @@ function StarRating({ rating, size = 'sm' }) {
   );
 }
 
+function InquiryModal({ teacherProfileId, teacherName, onClose }) {
+  const [content, setContent] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSend = async () => {
+    if (!content.trim()) return;
+    setSending(true);
+    setError('');
+    try {
+      await api.sendInquiry(teacherProfileId, content.trim());
+      setSent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold mb-1">Ask {teacherName}</h2>
+        {sent ? (
+          <>
+            <p className="text-sm text-gray-500 mb-4">Message sent! Check your messages for their reply.</p>
+            <button onClick={onClose} className="w-full bg-brand-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-brand-700">Done</button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500 mb-4">Ask about their teaching style, equipment, or anything else before booking.</p>
+            {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
+            <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={3}
+              placeholder="Hi, I'm interested in learning about..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+            <div className="flex gap-2">
+              <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleSend} disabled={sending || !content.trim()}
+                className="flex-1 text-sm bg-brand-600 text-white py-2.5 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50">
+                {sending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function TeacherProfile() {
   const { id } = useParams();
   const [teacher, setTeacher] = useState(null);
@@ -26,6 +76,7 @@ export default function TeacherProfile() {
   const [reviewStats, setReviewStats] = useState({ average: null, total: 0 });
   const [loading, setLoading] = useState(true);
   const [showBooking, setShowBooking] = useState(false);
+  const [showInquiry, setShowInquiry] = useState(false);
 
   useEffect(() => {
     api.getTeacher(id)
@@ -78,6 +129,18 @@ export default function TeacherProfile() {
             </div>
           </div>
 
+          {teacher.categories && teacher.categories.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {teacher.categories.map(cat => (
+                <span key={cat.slug} className="text-sm bg-brand-50 text-brand-600 px-3 py-1 rounded-full">{cat.name}</span>
+              ))}
+            </div>
+          )}
+
+          {teacher.cancellation_hours && (
+            <p className="text-xs text-gray-500 mb-3">{teacher.cancellation_hours}h cancellation policy</p>
+          )}
+
           {teacher.bio && <p className="text-gray-700 mb-4 leading-relaxed">{teacher.bio}</p>}
 
           {teacher.equipment_requirements && (
@@ -102,12 +165,20 @@ export default function TeacherProfile() {
             )}
           </div>
 
-          <button
-            onClick={() => setShowBooking(true)}
-            className="w-full bg-brand-600 text-white py-3 rounded-lg font-medium hover:bg-brand-700 transition-colors"
-          >
-            Book a Lesson
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowBooking(true)}
+              className="flex-1 bg-brand-600 text-white py-3 rounded-lg font-medium hover:bg-brand-700 transition-colors"
+            >
+              Book a Lesson
+            </button>
+            <button
+              onClick={() => setShowInquiry(true)}
+              className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+            >
+              Ask a Question
+            </button>
+          </div>
         </div>
       </div>
 
@@ -177,6 +248,14 @@ export default function TeacherProfile() {
           teacher={teacher}
           timeSlots={timeSlots}
           onClose={() => setShowBooking(false)}
+        />
+      )}
+
+      {showInquiry && (
+        <InquiryModal
+          teacherProfileId={teacher.profile_id}
+          teacherName={teacher.name}
+          onClose={() => setShowInquiry(false)}
         />
       )}
     </div>

@@ -10,8 +10,15 @@ export default function Search() {
   const [radius, setRadius] = useState(10);
   const [sort, setSort] = useState('distance');
   const [availability, setAvailability] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [category, setCategory] = useState('');
 
   useEffect(() => {
+    // Fetch categories
+    api.getCategories()
+      .then(data => setCategories(data.categories))
+      .catch(console.error);
+
     // Try to get user's location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -39,6 +46,7 @@ export default function Search() {
           sort,
         };
         if (availability) params.availability = availability;
+        if (category) params.category = category;
 
         const data = await api.searchTeachers(params);
         setTeachers(data.teachers);
@@ -50,11 +58,19 @@ export default function Search() {
     };
 
     fetchTeachers();
-  }, [location, radius, sort, availability]);
+  }, [location, radius, sort, availability, category]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Photography Teachers in London</h1>
+
+      {/* Category Filter */}
+      <div className="flex gap-2 overflow-x-auto pb-3 mb-4 -mx-4 px-4 scrollbar-hide">
+        <button onClick={() => setCategory('')} className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!category ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</button>
+        {categories.map(c => (
+          <button key={c.slug} onClick={() => setCategory(c.slug)} className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${category === c.slug ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{c.name}</button>
+        ))}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4 mb-6 bg-white p-4 rounded-xl border border-gray-200">

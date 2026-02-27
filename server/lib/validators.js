@@ -58,6 +58,8 @@ const updateTeacherProfileSchema = z.object({
   availableWeekdays: z.boolean().optional(),
   availableWeekends: z.boolean().optional(),
   searchRadiusKm: z.number().int().min(1).max(100).optional(),
+  categories: z.array(z.string().max(50)).max(5).optional(),
+  cancellationHours: z.number().int().min(1).max(168).optional(),
 });
 
 const addTimeSlotSchema = z.object({
@@ -85,9 +87,23 @@ const createReviewSchema = z.object({
   comment: z.string().max(1000).optional(),
 });
 
+// ── Booking action schemas ──
+
+const bookingAcceptSchema = z.object({
+  // Empty by default - just validates params
+});
+
+const bookingDeclineSchema = z.object({
+  // Empty by default - just validates params
+});
+
 // ── Message schemas ──
 
 const sendMessageSchema = z.object({
+  content: z.string().min(1, 'Message cannot be empty').max(2000),
+});
+
+const inquiryMessageSchema = z.object({
   content: z.string().min(1, 'Message cannot be empty').max(2000),
 });
 
@@ -132,8 +148,11 @@ module.exports = {
   updateTeacherProfileSchema,
   addTimeSlotSchema,
   createIntentSchema,
+  bookingAcceptSchema,
+  bookingDeclineSchema,
   createReviewSchema,
   sendMessageSchema,
+  inquiryMessageSchema,
   createDisputeSchema,
   respondDisputeSchema,
   updateProfileSchema,

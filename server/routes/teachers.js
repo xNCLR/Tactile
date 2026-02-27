@@ -1,5 +1,5 @@
 const express = require('express');
-const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
+const { getDb, queryAll, queryOne, runSql, transaction } = require('../db/schema');
 const { authenticate, optionalAuth, requireTeacherProfile } = require('../middleware/auth');
 const logger = require('../lib/logger');
 const { validate, validateQuery, searchTeachersSchema, updateTeacherProfileSchema, addTimeSlotSchema } = require('../lib/validators');
@@ -14,10 +14,22 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// GET /api/teachers/categories
+router.get('/categories', async (req, res) => {
+  try {
+    const db = await getDb();
+    const categories = queryAll(db, 'SELECT id, slug, name, description FROM categories ORDER BY name');
+    res.json({ categories });
+  } catch (err) {
+    logger.error('Categories fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
 // GET /api/teachers/search
 router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (req, res) => {
   try {
-    const { lat, lng, radius = 10, sort = 'distance', availability } = req.validatedQuery;
+    const { lat, lng, radius = 10, sort = 'distance', availability, category } = req.validatedQuery;
     const db = await getDb();
 
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
@@ -26,16 +38,23 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
       tp.search_radius_km,
       (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.teacher_id = tp.id) as avg_rating,
       (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count,
-      (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count
+      (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
+      (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE 1=1`;
 
     if (availability === 'weekdays') query += ' AND tp.available_weekdays = 1';
     else if (availability === 'weekends') query += ' AND tp.available_weekends = 1';
 
-    const teachers = queryAll(db, query);
+    if (category) {
+      query += ` AND tp.id IN (SELECT tc.teacher_id FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE c.slug = ?)`;
+    }
+
+    const params = category ? [category] : [];
+    const teachers = queryAll(db, query, params);
 
     let results = teachers.map((t) => ({
       ...t,
+      categories: t.categories ? t.categories.split(',') : [],
       distance: lat && lng ? haversineDistance(parseFloat(lat), parseFloat(lng), t.latitude, t.longitude) : null,
     }));
 
@@ -72,14 +91,21 @@ router.get('/:id', async (req, res) => {
     const teacher = queryOne(db, `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km,
-      (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count
+      tp.cancellation_hours,
+      (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
+      (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
 
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
 
     const timeSlots = queryAll(db, `SELECT id, day_of_week, start_time, end_time, is_available FROM time_slots WHERE teacher_id = ? AND is_available = 1 ORDER BY day_of_week, start_time`, [req.params.id]);
 
-    res.json({ teacher, timeSlots });
+    const teacherData = {
+      ...teacher,
+      categories: teacher.categories ? teacher.categories.split(',') : [],
+    };
+
+    res.json({ teacher: teacherData, timeSlots });
   } catch (err) {
     logger.error('Teacher fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch teacher' });
@@ -89,28 +115,50 @@ router.get('/:id', async (req, res) => {
 // PUT /api/teachers/profile — create or update teacher profile
 router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async (req, res) => {
   try {
-    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm } = req.validated;
+    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm, categories, cancellationHours } = req.validated;
     const db = await getDb();
 
     let profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
 
-    if (profile) {
-      // Update existing
-      runSql(db, `UPDATE teacher_profiles SET bio = COALESCE(?, bio), hourly_rate = COALESCE(?, hourly_rate),
-        equipment_requirements = COALESCE(?, equipment_requirements), available_weekdays = COALESCE(?, available_weekdays),
-        available_weekends = COALESCE(?, available_weekends), search_radius_km = COALESCE(?, search_radius_km),
-        updated_at = datetime('now') WHERE user_id = ?`,
-        [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, searchRadiusKm || null, req.user.id]);
-    } else {
-      // Create new teacher profile
-      const { v4: uuidv4 } = require('uuid');
-      const profileId = uuidv4();
-      runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1, searchRadiusKm || 10]);
-    }
+    const result = transaction(db, () => {
+      if (profile) {
+        // Update existing
+        runSql(db, `UPDATE teacher_profiles SET bio = COALESCE(?, bio), hourly_rate = COALESCE(?, hourly_rate),
+          equipment_requirements = COALESCE(?, equipment_requirements), available_weekdays = COALESCE(?, available_weekdays),
+          available_weekends = COALESCE(?, available_weekends), search_radius_km = COALESCE(?, search_radius_km),
+          cancellation_hours = COALESCE(?, cancellation_hours),
+          updated_at = datetime('now') WHERE user_id = ?`,
+          [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, searchRadiusKm || null, cancellationHours || null, req.user.id]);
+      } else {
+        // Create new teacher profile
+        const { v4: uuidv4 } = require('uuid');
+        const profileId = uuidv4();
+        runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1, searchRadiusKm || 10, cancellationHours || null]);
+      }
 
-    profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
-    res.json({ profile });
+      // Handle categories if provided
+      if (categories && Array.isArray(categories)) {
+        const updatedProfile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+
+        // Delete existing categories for this teacher
+        runSql(db, 'DELETE FROM teacher_categories WHERE teacher_id = ?', [updatedProfile.id]);
+
+        // Insert new categories
+        for (const slug of categories) {
+          const cat = queryOne(db, 'SELECT id FROM categories WHERE slug = ?', [slug]);
+          if (cat) {
+            const { v4: uuidv4 } = require('uuid');
+            runSql(db, 'INSERT INTO teacher_categories (id, teacher_id, category_id) VALUES (?, ?, ?)',
+              [uuidv4(), updatedProfile.id, cat.id]);
+          }
+        }
+      }
+
+      return queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    });
+
+    res.json({ profile: result });
   } catch (err) {
     logger.error('Profile update error:', err);
     res.status(500).json({ error: 'Failed to update profile' });

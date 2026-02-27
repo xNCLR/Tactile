@@ -226,8 +226,25 @@ export default function Dashboard() {
   const statusColor = {
     confirmed: 'bg-green-50 text-green-700',
     pending: 'bg-yellow-50 text-yellow-700',
+    awaiting_teacher: 'bg-orange-50 text-orange-600',
+    declined: 'bg-red-50 text-red-600',
     cancelled: 'bg-red-50 text-red-600',
     completed: 'bg-blue-50 text-blue-700',
+  };
+
+  const handleAccept = async (bookingId) => {
+    try {
+      await api.acceptBooking(bookingId);
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'confirmed' } : b));
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleDecline = async (bookingId) => {
+    if (!confirm('Decline this booking? The student will be refunded.')) return;
+    try {
+      await api.declineBooking(bookingId);
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'declined' } : b));
+    } catch (err) { alert(err.message); }
   };
 
   return (
@@ -352,7 +369,16 @@ export default function Dashboard() {
                   </p>
                   {booking.notes && <p className="italic text-gray-400">"{booking.notes}"</p>}
                 </div>
-                <div className="mt-3 flex gap-3">
+                <div className="mt-3 flex gap-3 flex-wrap">
+                  {!isMyStudentBooking && booking.status === 'awaiting_teacher' && (
+                    <>
+                      <button onClick={() => handleAccept(booking.id)} className="text-sm bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">Accept</button>
+                      <button onClick={() => handleDecline(booking.id)} className="text-sm bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700">Decline</button>
+                    </>
+                  )}
+                  {isMyStudentBooking && booking.status === 'awaiting_teacher' && (
+                    <span className="text-sm text-gray-500">Waiting for teacher to confirm</span>
+                  )}
                   {booking.status === 'confirmed' && (
                     <button
                       onClick={() => handleCancel(booking.id)}

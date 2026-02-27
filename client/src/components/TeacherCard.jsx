@@ -35,6 +35,17 @@ export default function TeacherCard({ teacher }) {
           <p className="text-sm text-gray-600 line-clamp-2">{teacher.bio}</p>
         )}
 
+        {(() => {
+          const cats = teacher.categories ? teacher.categories.split(', ') : [];
+          return cats.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {cats.map(c => (
+                <span key={c} className="text-xs bg-brand-50 text-brand-600 px-2 py-0.5 rounded-full">{c}</span>
+              ))}
+            </div>
+          ) : null;
+        })()}
+
         <div className="mt-3 flex items-center gap-2 text-xs text-gray-400 flex-wrap">
           {teacher.avg_rating && (
             <span className="bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full flex items-center gap-1">

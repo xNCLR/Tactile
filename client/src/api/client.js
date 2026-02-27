@@ -95,4 +95,15 @@ export const api = {
 
   // Badges
   getBadges: (userId) => request(`/badges/${userId}`),
+
+  // Categories
+  getCategories: () => request('/categories'),
+
+  // Booking acceptance (teacher actions)
+  acceptBooking: (id) => request(`/bookings/${id}/accept`, { method: 'PATCH' }),
+  declineBooking: (id) => request(`/bookings/${id}/decline`, { method: 'PATCH' }),
+
+  // Inquiry messaging (pre-booking)
+  sendInquiry: (teacherProfileId, content) => request(`/messages/inquiry/${teacherProfileId}`, { method: 'POST', body: JSON.stringify({ content }) }),
+  getInquiryMessages: (teacherProfileId) => request(`/messages/inquiry/${teacherProfileId}`),
 };

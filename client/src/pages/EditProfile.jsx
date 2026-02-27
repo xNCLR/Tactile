@@ -40,6 +40,17 @@ export default function EditProfile() {
   const [newStart, setNewStart] = useState('09:00');
   const [newEnd, setNewEnd] = useState('12:00');
 
+  // Categories
+  const [allCategories, setAllCategories] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+
+  useEffect(() => {
+    // Fetch categories
+    api.getCategories()
+      .then(data => setAllCategories(data.categories || []))
+      .catch(console.error);
+  }, []);
+
   useEffect(() => {
     if (user) {
       setName(user.name || '');
@@ -59,6 +70,13 @@ export default function EditProfile() {
         photo_2: teacherProfile.photo_2 || null,
         photo_3: teacherProfile.photo_3 || null,
       });
+      // Load categories if available
+      if (teacherProfile.categories) {
+        const categoryIds = Array.isArray(teacherProfile.categories)
+          ? teacherProfile.categories.map(c => c.slug)
+          : [];
+        setSelectedCategories(categoryIds);
+      }
       loadTimeSlots();
     }
   }, [user, teacherProfile]);
@@ -133,6 +151,7 @@ export default function EditProfile() {
           availableWeekdays: weekdays,
           availableWeekends: weekends,
           searchRadiusKm: parseInt(travelRadius),
+          categories: selectedCategories,
         });
       }
 
@@ -259,6 +278,25 @@ export default function EditProfile() {
                   rows={4}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
                 <p className="text-xs text-gray-400 mt-1">{bio.length}/500 characters</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Specialties (max 5)</label>
+                <div className="flex flex-wrap gap-2">
+                  {allCategories.map(c => {
+                    const isSelected = selectedCategories.includes(c.slug);
+                    return (
+                      <button key={c.slug} type="button"
+                        onClick={() => {
+                          if (isSelected) setSelectedCategories(prev => prev.filter(s => s !== c.slug));
+                          else if (selectedCategories.length < 5) setSelectedCategories(prev => [...prev, c.slug]);
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">{selectedCategories.length}/5 selected</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (£)</label>

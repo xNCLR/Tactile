@@ -7,6 +7,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
   STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_'),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(), // Optional for development
 
   // Optional with defaults
   PORT: z.coerce.number().default(3001),
