@@ -56,6 +56,9 @@ export default function TeacherCard({ teacher }) {
           {teacher.search_radius_km > 5 && (
             <span className="bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">Travels {teacher.search_radius_km} km</span>
           )}
+          {teacher.lesson_count >= 5 && (
+            <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-full">{teacher.lesson_count} lessons</span>
+          )}
         </div>
       </div>
     </Link>

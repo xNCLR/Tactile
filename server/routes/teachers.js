@@ -23,7 +23,8 @@ router.get('/search', async (req, res) => {
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends,
       tp.search_radius_km,
       (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.teacher_id = tp.id) as avg_rating,
-      (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count
+      (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count,
+      (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE 1=1`;
 
     if (availability === 'weekdays') query += ' AND tp.available_weekdays = 1';
@@ -63,7 +64,8 @@ router.get('/:id', async (req, res) => {
     const db = await getDb();
     const teacher = queryOne(db, `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
-      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km
+      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km,
+      (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
 
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });

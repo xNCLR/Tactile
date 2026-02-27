@@ -174,6 +174,7 @@ export default function Dashboard() {
   const [disputeBooking, setDisputeBooking] = useState(null);
   const [respondDispute, setRespondDispute] = useState(null);
   const [disputes, setDisputes] = useState({ asStudent: [], asTeacher: [] });
+  const [rebookSuggestions, setRebookSuggestions] = useState([]);
 
   const loadData = () => {
     api.getBookings()
@@ -182,6 +183,9 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
     api.getDisputes()
       .then((data) => setDisputes(data))
+      .catch(console.error);
+    api.getRebookSuggestions()
+      .then((data) => setRebookSuggestions(data.suggestions || []))
       .catch(console.error);
   };
 
@@ -267,6 +271,42 @@ export default function Dashboard() {
               <span className="text-gray-500">Weekends:</span>{' '}
               <span className="font-medium">{teacherProfile.available_weekends ? 'Available' : 'Unavailable'}</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rebook nudge */}
+      {rebookSuggestions.length > 0 && (
+        <div className="mb-6">
+          <h2 className="font-semibold mb-3">Book again?</h2>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {rebookSuggestions.map((s) => {
+              const initials = s.name.split(' ').map((n) => n[0]).join('').toUpperCase();
+              return (
+                <Link
+                  key={s.profile_id}
+                  to={`/teacher/${s.profile_id}`}
+                  className="flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow w-56"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {s.profile_photo ? (
+                        <img src={s.profile_photo} alt={s.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-bold text-brand-500">{initials}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{s.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {s.lessons_with} lesson{s.lessons_with !== 1 ? 's' : ''} together
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-brand-600 font-medium">£{s.hourly_rate}/hr</p>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

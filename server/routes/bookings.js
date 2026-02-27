@@ -157,6 +157,43 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/bookings/rebook-suggestions — teachers worth rebooking
+router.get('/rebook-suggestions', authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // Find teachers user had completed lessons with + left a good review (4+), or completed without dispute
+    const suggestions = queryAll(db, `
+      SELECT DISTINCT tp.id as profile_id, u.name, u.profile_photo, tp.hourly_rate, tp.bio,
+        r.rating as last_rating, b.booking_date as last_lesson,
+        (SELECT COUNT(*) FROM bookings b2 WHERE b2.teacher_id = tp.id AND b2.student_id = ? AND b2.status IN ('completed', 'confirmed')) as lessons_with
+      FROM bookings b
+      JOIN teacher_profiles tp ON b.teacher_id = tp.id
+      JOIN users u ON tp.user_id = u.id
+      LEFT JOIN reviews r ON r.booking_id = b.id
+      LEFT JOIN disputes d ON d.booking_id = b.id
+      WHERE b.student_id = ?
+        AND b.status IN ('completed', 'confirmed')
+        AND d.id IS NULL
+        AND (r.rating IS NULL OR r.rating >= 4)
+      ORDER BY b.booking_date DESC
+    `, [req.user.id, req.user.id]);
+
+    // Deduplicate by teacher, keep most recent
+    const seen = new Set();
+    const unique = suggestions.filter((s) => {
+      if (seen.has(s.profile_id)) return false;
+      seen.add(s.profile_id);
+      return true;
+    });
+
+    res.json({ suggestions: unique.slice(0, 3) });
+  } catch (err) {
+    console.error('Rebook suggestions error:', err);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
 // GET /api/bookings/stripe-key — expose publishable key to frontend
 router.get('/stripe-key', (req, res) => {
   res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY });

@@ -97,6 +97,9 @@ export default function TeacherProfile() {
             {teacher.search_radius_km > 0 && (
               <span className="bg-purple-50 text-purple-600 text-sm px-3 py-1 rounded-full">Travels up to {teacher.search_radius_km} km</span>
             )}
+            {teacher.lesson_count >= 5 && (
+              <span className="bg-gray-50 text-gray-600 text-sm px-3 py-1 rounded-full">{teacher.lesson_count} lessons taught</span>
+            )}
           </div>
 
           <button

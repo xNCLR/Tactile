@@ -43,6 +43,7 @@ export const api = {
   confirmBooking: (data) => request('/bookings/confirm', { method: 'POST', body: JSON.stringify(data) }),
   getBookings: () => request('/bookings'),
   cancelBooking: (id) => request(`/bookings/${id}/cancel`, { method: 'PATCH' }),
+  getRebookSuggestions: () => request('/bookings/rebook-suggestions'),
 
   // Users
   updateProfile: (data) => request('/users/profile', { method: 'PUT', body: JSON.stringify(data) }),
