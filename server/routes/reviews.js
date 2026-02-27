@@ -2,13 +2,15 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
+const logger = require('../lib/logger');
+const { validate, createReviewSchema } = require('../lib/validators');
 
 const router = express.Router();
 
 // POST /api/reviews — leave a review for a completed booking
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, validate(createReviewSchema), async (req, res) => {
   try {
-    const { bookingId, rating, comment } = req.body;
+    const { bookingId, rating, comment } = req.validated;
     if (!bookingId || !rating) return res.status(400).json({ error: 'bookingId and rating are required' });
     if (rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1-5' });
 
@@ -34,7 +36,7 @@ router.post('/', authenticate, async (req, res) => {
 
     res.status(201).json({ review: { id, booking_id: bookingId, rating, comment } });
   } catch (err) {
-    console.error('Create review error:', err);
+    logger.error('Create review error:', err);
     res.status(500).json({ error: 'Failed to create review' });
   }
 });
@@ -56,7 +58,7 @@ router.get('/teacher/:teacherId', async (req, res) => {
 
     res.json({ reviews, average: avg, total: reviews.length });
   } catch (err) {
-    console.error('Fetch reviews error:', err);
+    logger.error('Fetch reviews error:', err);
     res.status(500).json({ error: 'Failed to fetch reviews' });
   }
 });

@@ -5,13 +5,15 @@ const { getDb, queryOne, runSql, saveDb } = require('../db/schema');
 const crypto = require('crypto');
 const { generateToken, authenticate } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../services/email');
+const logger = require('../lib/logger');
+const { validate, registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../lib/validators');
 
 const router = express.Router();
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', validate(registerSchema), async (req, res) => {
   try {
-    const { email, password, name, phone, postcode, latitude, longitude } = req.body;
+    const { email, password, name, phone, postcode, latitude, longitude } = req.validated;
 
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password, and name are required' });
@@ -35,15 +37,15 @@ router.post('/register', async (req, res) => {
     const token = generateToken({ id, email });
     res.status(201).json({ token, user: { id, email, name } });
   } catch (err) {
-    console.error('Registration error:', err);
+    logger.error('Registration error:', err);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', validate(loginSchema), async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.validated;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -64,7 +66,7 @@ router.post('/login', async (req, res) => {
       teacherProfile,
     });
   } catch (err) {
-    console.error('Login error:', err);
+    logger.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -84,15 +86,15 @@ router.get('/me', authenticate, async (req, res) => {
       teacherProfile,
     });
   } catch (err) {
-    console.error('Auth check error:', err);
+    logger.error('Auth check error:', err);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', validate(forgotPasswordSchema), async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email } = req.validated;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
     const db = await getDb();
@@ -111,15 +113,15 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (err) {
-    console.error('Forgot password error:', err);
+    logger.error('Forgot password error:', err);
     res.status(500).json({ error: 'Failed to process reset request' });
   }
 });
 
 // POST /api/auth/reset-password
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', validate(resetPasswordSchema), async (req, res) => {
   try {
-    const { token, password } = req.body;
+    const { token, password } = req.validated;
     if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' });
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
@@ -134,7 +136,7 @@ router.post('/reset-password', async (req, res) => {
 
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
-    console.error('Reset password error:', err);
+    logger.error('Reset password error:', err);
     res.status(500).json({ error: 'Failed to reset password' });
   }
 });

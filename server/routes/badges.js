@@ -1,5 +1,6 @@
 const express = require('express');
 const { getDb, queryOne, queryAll } = require('../db/schema');
+const logger = require('../lib/logger');
 
 const router = express.Router();
 
@@ -75,7 +76,7 @@ router.get('/:userId', async (req, res) => {
 
     res.json({ badges, nextBadges, stats });
   } catch (err) {
-    console.error('Badges fetch error:', err);
+    logger.error('Badges fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch badges' });
   }
 });

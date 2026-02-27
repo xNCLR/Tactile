@@ -1,6 +1,8 @@
 const express = require('express');
 const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
-const { authenticate, requireTeacherProfile } = require('../middleware/auth');
+const { authenticate, optionalAuth, requireTeacherProfile } = require('../middleware/auth');
+const logger = require('../lib/logger');
+const { validate, validateQuery, searchTeachersSchema, updateTeacherProfileSchema, addTimeSlotSchema } = require('../lib/validators');
 
 const router = express.Router();
 
@@ -13,9 +15,9 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 }
 
 // GET /api/teachers/search
-router.get('/search', async (req, res) => {
+router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (req, res) => {
   try {
-    const { lat, lng, radius = 10, sort = 'distance', availability } = req.query;
+    const { lat, lng, radius = 10, sort = 'distance', availability } = req.validatedQuery;
     const db = await getDb();
 
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
@@ -46,6 +48,11 @@ router.get('/search', async (req, res) => {
       });
     }
 
+    // Exclude current user's own teacher profile from results
+    if (req.user) {
+      results = results.filter((t) => t.user_id !== req.user.id);
+    }
+
     if (sort === 'price') results.sort((a, b) => a.hourly_rate - b.hourly_rate);
     else if (sort === 'distance' && lat && lng) results.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 
@@ -53,7 +60,7 @@ router.get('/search', async (req, res) => {
 
     res.json({ teachers: results, total: results.length });
   } catch (err) {
-    console.error('Search error:', err);
+    logger.error('Search error:', err);
     res.status(500).json({ error: 'Search failed' });
   }
 });
@@ -74,15 +81,15 @@ router.get('/:id', async (req, res) => {
 
     res.json({ teacher, timeSlots });
   } catch (err) {
-    console.error('Teacher fetch error:', err);
+    logger.error('Teacher fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch teacher' });
   }
 });
 
 // PUT /api/teachers/profile — create or update teacher profile
-router.put('/profile', authenticate, async (req, res) => {
+router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async (req, res) => {
   try {
-    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm } = req.body;
+    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm } = req.validated;
     const db = await getDb();
 
     let profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
@@ -105,15 +112,15 @@ router.put('/profile', authenticate, async (req, res) => {
     profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     res.json({ profile });
   } catch (err) {
-    console.error('Profile update error:', err);
+    logger.error('Profile update error:', err);
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
 // POST /api/teachers/time-slots
-router.post('/time-slots', authenticate, requireTeacherProfile, async (req, res) => {
+router.post('/time-slots', authenticate, requireTeacherProfile, validate(addTimeSlotSchema), async (req, res) => {
   try {
-    const { dayOfWeek, startTime, endTime } = req.body;
+    const { dayOfWeek, startTime, endTime } = req.validated;
     if (dayOfWeek === undefined || !startTime || !endTime) {
       return res.status(400).json({ error: 'dayOfWeek, startTime, and endTime are required' });
     }
@@ -129,7 +136,7 @@ router.post('/time-slots', authenticate, requireTeacherProfile, async (req, res)
 
     res.status(201).json({ slot: { id, day_of_week: dayOfWeek, start_time: startTime, end_time: endTime, is_available: 1 } });
   } catch (err) {
-    console.error('Add time slot error:', err);
+    logger.error('Add time slot error:', err);
     res.status(500).json({ error: 'Failed to add time slot' });
   }
 });
@@ -147,7 +154,7 @@ router.delete('/time-slots/:id', authenticate, requireTeacherProfile, async (req
     runSql(db, 'DELETE FROM time_slots WHERE id = ?', [req.params.id]);
     res.json({ message: 'Time slot removed' });
   } catch (err) {
-    console.error('Remove time slot error:', err);
+    logger.error('Remove time slot error:', err);
     res.status(500).json({ error: 'Failed to remove time slot' });
   }
 });

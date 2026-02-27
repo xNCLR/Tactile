@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
+const logger = require('../lib/logger');
+const { validate, sendMessageSchema } = require('../lib/validators');
 
 const router = express.Router();
 
@@ -63,7 +65,7 @@ router.get('/threads', authenticate, async (req, res) => {
 
     res.json({ threads });
   } catch (err) {
-    console.error('Threads fetch error:', err);
+    logger.error('Threads fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch threads' });
   }
 });
@@ -99,15 +101,15 @@ router.get('/:bookingId', authenticate, async (req, res) => {
 
     res.json({ messages, booking: { date: booking.booking_date, time: booking.start_time }, otherUser });
   } catch (err) {
-    console.error('Messages fetch error:', err);
+    logger.error('Messages fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch messages' });
   }
 });
 
 // POST /api/messages/:bookingId — send a message
-router.post('/:bookingId', authenticate, async (req, res) => {
+router.post('/:bookingId', authenticate, validate(sendMessageSchema), async (req, res) => {
   try {
-    const { content } = req.body;
+    const { content } = req.validated;
     if (!content?.trim()) return res.status(400).json({ error: 'Message content is required' });
 
     const db = await getDb();
@@ -122,7 +124,7 @@ router.post('/:bookingId', authenticate, async (req, res) => {
       message: { id, booking_id: req.params.bookingId, sender_id: req.user.id, content: content.trim(), read: 0, sender_name: req.user.name },
     });
   } catch (err) {
-    console.error('Send message error:', err);
+    logger.error('Send message error:', err);
     res.status(500).json({ error: 'Failed to send message' });
   }
 });

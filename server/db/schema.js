@@ -2,10 +2,11 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'tactile.db');
+const DB_PATH = path.join(__dirname, '..', process.env.DB_PATH || 'tactile.db');
 
 let dbInstance = null;
 let sqlPromise = null;
+let saveTimeout = null;
 
 async function getDb() {
   if (dbInstance) return dbInstance;
@@ -20,11 +21,32 @@ async function getDb() {
     dbInstance = new SQL.Database();
   }
 
+  // Enable foreign keys and WAL-like journaling
+  dbInstance.run('PRAGMA foreign_keys = ON');
+  dbInstance.run('PRAGMA journal_mode = MEMORY');
+
   return dbInstance;
 }
 
+// Debounced save — coalesces rapid writes into a single disk flush
 function saveDb() {
   if (!dbInstance) return;
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      const data = dbInstance.export();
+      const buffer = Buffer.from(data);
+      fs.writeFileSync(DB_PATH, buffer);
+    } catch (err) {
+      console.error('Database save error:', err);
+    }
+  }, 100);
+}
+
+// Immediate save for critical operations (shutdown, transactions)
+function saveDbSync() {
+  if (!dbInstance) return;
+  if (saveTimeout) clearTimeout(saveTimeout);
   const data = dbInstance.export();
   const buffer = Buffer.from(data);
   fs.writeFileSync(DB_PATH, buffer);
@@ -32,6 +54,8 @@ function saveDb() {
 
 async function initDb() {
   const db = await getDb();
+
+  // ── Tables ──
 
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -132,11 +156,29 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
 
-  saveDb();
+  // ── Indexes ──
+
+  db.run('CREATE INDEX IF NOT EXISTS idx_teacher_profiles_user_id ON teacher_profiles(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_time_slots_teacher_id ON time_slots(teacher_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_bookings_student_id ON bookings(student_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_bookings_teacher_id ON bookings(teacher_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(booking_date)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_reviews_teacher_id ON reviews(teacher_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_reviews_student_id ON reviews(student_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_messages_booking_id ON messages(booking_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_disputes_booking_id ON disputes(booking_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)');
+
+  saveDbSync();
   console.log('Database initialized successfully');
 }
 
-// Helper: query returning array of objects
+// ── Query helpers ──
+
 function queryAll(db, sql, params = []) {
   const stmt = db.prepare(sql);
   if (params.length) stmt.bind(params);
@@ -158,4 +200,30 @@ function runSql(db, sql, params = []) {
   saveDb();
 }
 
-module.exports = { getDb, saveDb, initDb, queryAll, queryOne, runSql, DB_PATH };
+// Run multiple statements atomically
+function transaction(db, fn) {
+  db.run('BEGIN TRANSACTION');
+  try {
+    const result = fn();
+    db.run('COMMIT');
+    saveDb();
+    return result;
+  } catch (err) {
+    db.run('ROLLBACK');
+    throw err;
+  }
+}
+
+// Graceful shutdown
+function closeDb() {
+  saveDbSync();
+  if (dbInstance) {
+    dbInstance.close();
+    dbInstance = null;
+  }
+}
+
+process.on('SIGINT', () => { closeDb(); process.exit(0); });
+process.on('SIGTERM', () => { closeDb(); process.exit(0); });
+
+module.exports = { getDb, saveDb, saveDbSync, initDb, queryAll, queryOne, runSql, transaction, closeDb, DB_PATH };

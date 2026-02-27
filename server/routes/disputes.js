@@ -3,13 +3,15 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb, queryOne, queryAll, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
 const { refundPayment } = require('../services/stripe');
+const logger = require('../lib/logger');
+const { validate, createDisputeSchema, respondDisputeSchema } = require('../lib/validators');
 
 const router = express.Router();
 
 // POST /api/disputes — raise a dispute on a completed/confirmed booking
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, validate(createDisputeSchema), async (req, res) => {
   try {
-    const { bookingId, reason, refundType } = req.body;
+    const { bookingId, reason, refundType } = req.validated;
     if (!bookingId || !reason || !refundType) {
       return res.status(400).json({ error: 'bookingId, reason, and refundType are required' });
     }
@@ -34,15 +36,15 @@ router.post('/', authenticate, async (req, res) => {
 
     res.status(201).json({ dispute: { id, booking_id: bookingId, reason, refund_type: refundType, status: 'open' } });
   } catch (err) {
-    console.error('Create dispute error:', err);
+    logger.error('Create dispute error:', err);
     res.status(500).json({ error: 'Failed to create dispute' });
   }
 });
 
 // PATCH /api/disputes/:id/respond — teacher accepts or declines
-router.patch('/:id/respond', authenticate, async (req, res) => {
+router.patch('/:id/respond', authenticate, validate(respondDisputeSchema), async (req, res) => {
   try {
-    const { action, response } = req.body;
+    const { action, response } = req.validated;
     if (!['accept', 'decline'].includes(action)) {
       return res.status(400).json({ error: 'action must be "accept" or "decline"' });
     }
@@ -75,7 +77,7 @@ router.patch('/:id/respond', authenticate, async (req, res) => {
 
     res.json({ dispute: { ...dispute, status: action === 'accept' ? 'accepted' : 'declined' } });
   } catch (err) {
-    console.error('Dispute response error:', err);
+    logger.error('Dispute response error:', err);
     res.status(500).json({ error: 'Failed to respond to dispute' });
   }
 });
@@ -109,7 +111,7 @@ router.get('/', authenticate, async (req, res) => {
 
     res.json({ asStudent, asTeacher });
   } catch (err) {
-    console.error('Disputes fetch error:', err);
+    logger.error('Disputes fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch disputes' });
   }
 });
@@ -128,7 +130,7 @@ router.post('/check-escalation', async (req, res) => {
 
     res.json({ escalated: staleDisputes.length });
   } catch (err) {
-    console.error('Escalation check error:', err);
+    logger.error('Escalation check error:', err);
     res.status(500).json({ error: 'Escalation check failed' });
   }
 });

@@ -4,6 +4,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { getDb, queryOne, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
+const logger = require('../lib/logger');
 
 const router = express.Router();
 
@@ -49,7 +50,7 @@ router.post('/profile-photo', authenticate, upload.single('photo'), async (req, 
 
     res.json({ url: photoUrl });
   } catch (err) {
-    console.error('Profile photo upload error:', err);
+    logger.error('Profile photo upload error:', err);
     res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });
@@ -76,7 +77,7 @@ router.post('/portfolio', authenticate, upload.single('photo'), async (req, res)
 
     res.json({ url: photoUrl, slot });
   } catch (err) {
-    console.error('Portfolio upload error:', err);
+    logger.error('Portfolio upload error:', err);
     res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });
@@ -103,7 +104,7 @@ router.delete('/portfolio/:slot', authenticate, async (req, res) => {
 
     res.json({ message: 'Photo removed' });
   } catch (err) {
-    console.error('Portfolio delete error:', err);
+    logger.error('Portfolio delete error:', err);
     res.status(500).json({ error: 'Failed to delete photo' });
   }
 });

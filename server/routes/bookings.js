@@ -4,13 +4,15 @@ const { getDb, queryOne, queryAll, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
 const { createPaymentIntent, refundPayment } = require('../services/stripe');
 const { sendBookingConfirmation, sendBookingNotification } = require('../services/email');
+const logger = require('../lib/logger');
+const { validate, createIntentSchema } = require('../lib/validators');
 
 const router = express.Router();
 
 // POST /api/bookings/create-intent — Step 1: Create payment intent + pending booking
-router.post('/create-intent', authenticate, async (req, res) => {
+router.post('/create-intent', authenticate, validate(createIntentSchema), async (req, res) => {
   try {
-    const { teacherId, bookingDate, startTime, endTime, durationHours, notes } = req.body;
+    const { teacherId, bookingDate, startTime, endTime, durationHours, notes } = req.validated;
     if (!teacherId || !bookingDate || !startTime || !endTime || !durationHours) {
       return res.status(400).json({ error: 'Missing required booking fields' });
     }
@@ -45,7 +47,7 @@ router.post('/create-intent', authenticate, async (req, res) => {
       teacherName: teacher.teacher_name,
     });
   } catch (err) {
-    console.error('Create intent error:', err);
+    logger.error('Create intent error:', err);
     res.status(500).json({ error: 'Failed to create payment' });
   }
 });
@@ -103,7 +105,7 @@ router.post('/confirm', authenticate, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Confirm booking error:', err);
+    logger.error('Confirm booking error:', err);
     res.status(500).json({ error: 'Failed to confirm booking' });
   }
 });
@@ -128,7 +130,7 @@ router.get('/', authenticate, async (req, res) => {
 
     res.json({ bookings });
   } catch (err) {
-    console.error('Bookings fetch error:', err);
+    logger.error('Bookings fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch bookings' });
   }
 });
@@ -152,7 +154,7 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
     runSql(db, `UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', updated_at = datetime('now') WHERE id = ?`, [req.params.id]);
     res.json({ message: 'Booking cancelled and refunded' });
   } catch (err) {
-    console.error('Cancellation error:', err);
+    logger.error('Cancellation error:', err);
     res.status(500).json({ error: 'Cancellation failed' });
   }
 });
@@ -189,7 +191,7 @@ router.get('/rebook-suggestions', authenticate, async (req, res) => {
 
     res.json({ suggestions: unique.slice(0, 3) });
   } catch (err) {
-    console.error('Rebook suggestions error:', err);
+    logger.error('Rebook suggestions error:', err);
     res.status(500).json({ error: 'Failed to fetch suggestions' });
   }
 });

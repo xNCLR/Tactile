@@ -1,11 +1,10 @@
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'tactile-dev-secret-change-in-production';
+const config = require('../config');
 
 function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email },
-    JWT_SECRET,
+    config.JWT_SECRET,
     { expiresIn: '7d' }
   );
 }
@@ -18,12 +17,25 @@ function authenticate(req, res, next) {
 
   try {
     const token = header.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, config.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+// Optional auth — sets req.user if valid token present, doesn't reject otherwise
+function optionalAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return next();
+  try {
+    const token = header.split(' ')[1];
+    req.user = jwt.verify(token, config.JWT_SECRET);
+  } catch (err) {
+    // Invalid token — just proceed without user
+  }
+  next();
 }
 
 // Middleware: require user to have a teacher profile
@@ -39,4 +51,4 @@ function requireTeacherProfile(req, res, next) {
   }).catch(() => res.status(500).json({ error: 'Server error' }));
 }
 
-module.exports = { generateToken, authenticate, requireTeacherProfile, JWT_SECRET };
+module.exports = { generateToken, authenticate, optionalAuth, requireTeacherProfile };
