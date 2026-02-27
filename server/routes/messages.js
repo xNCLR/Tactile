@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
+const { createNotification } = require('../lib/notifications');
+const { sendInquiryReceivedEmail } = require('../services/email');
 const logger = require('../lib/logger');
 const { validate, sendMessageSchema, inquiryMessageSchema } = require('../lib/validators');
 
@@ -118,12 +120,41 @@ router.post('/inquiry/:teacherProfileId', authenticate, validate(inquiryMessageS
     if (!content?.trim()) return res.status(400).json({ error: 'Message content is required' });
 
     const db = await getDb();
-    const teacher = queryOne(db, 'SELECT id FROM teacher_profiles WHERE id = ?', [req.params.teacherProfileId]);
+    const teacher = queryOne(db, 'SELECT id, user_id FROM teacher_profiles WHERE id = ?', [req.params.teacherProfileId]);
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
+
+    // Check if this is the first message in the thread
+    const existingMessages = queryOne(db,
+      'SELECT COUNT(*) as count FROM messages WHERE teacher_profile_id = ? AND booking_id IS NULL',
+      [req.params.teacherProfileId]);
+    const isFirstMessage = (existingMessages?.count || 0) === 0;
 
     const id = uuidv4();
     runSql(db, 'INSERT INTO messages (id, teacher_profile_id, sender_id, content) VALUES (?, ?, ?, ?)',
       [id, req.params.teacherProfileId, req.user.id, content.trim()]);
+
+    // Notify teacher only on first message in thread
+    if (isFirstMessage) {
+      const student = queryOne(db, 'SELECT name, email FROM users WHERE id = ?', [req.user.id]);
+      const teacherUser = queryOne(db, 'SELECT name, email FROM users WHERE id = ?', [teacher.user_id]);
+      if (student && teacherUser) {
+        // Send email notification
+        await sendInquiryReceivedEmail({
+          teacherEmail: teacherUser.email,
+          teacherName: teacherUser.name,
+          studentName: student.name,
+        });
+
+        // Create in-app notification
+        await createNotification({
+          userId: teacher.user_id,
+          type: 'inquiry_received',
+          title: 'New Inquiry',
+          message: `${student.name} has sent you a message`,
+          link: '/dashboard',
+        });
+      }
+    }
 
     res.status(201).json({
       message: { id, teacher_profile_id: req.params.teacherProfileId, sender_id: req.user.id, content: content.trim(), read: 0, sender_name: req.user.name },

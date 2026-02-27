@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import BookingModal from '../components/BookingModal';
+import CalendarView from '../components/CalendarView';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -231,15 +232,13 @@ export default function TeacherProfile() {
       {/* Available slots */}
       {timeSlots.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-semibold mb-4">Available Times</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {timeSlots.map((slot) => (
-              <div key={slot.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="font-medium text-sm">{DAY_NAMES[slot.day_of_week]}</span>
-                <span className="text-sm text-gray-500">{slot.start_time} – {slot.end_time}</span>
-              </div>
-            ))}
-          </div>
+          <h2 className="font-semibold mb-4">Availability</h2>
+          <CalendarView
+            timeSlots={timeSlots}
+            onSlotClick={(slot, date) => {
+              setShowBooking(true);
+            }}
+          />
         </div>
       )}
 

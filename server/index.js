@@ -16,6 +16,8 @@ const reviewRoutes = require('./routes/reviews');
 const messageRoutes = require('./routes/messages');
 const disputeRoutes = require('./routes/disputes');
 const badgeRoutes = require('./routes/badges');
+const notificationRoutes = require('./routes/notifications');
+const earningsRoutes = require('./routes/earnings');
 const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
@@ -85,6 +87,8 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/badges', badgeRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/earnings', earningsRoutes);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

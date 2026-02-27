@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
+import CalendarView from '../components/CalendarView';
 
 function DisputeModal({ booking, onClose, onSubmit }) {
   const [reason, setReason] = useState('');
@@ -175,6 +176,8 @@ export default function Dashboard() {
   const [respondDispute, setRespondDispute] = useState(null);
   const [disputes, setDisputes] = useState({ asStudent: [], asTeacher: [] });
   const [rebookSuggestions, setRebookSuggestions] = useState([]);
+  const [earnings, setEarnings] = useState(null);
+  const [teacherTimeSlots, setTeacherTimeSlots] = useState([]);
 
   const loadData = () => {
     api.getBookings()
@@ -187,6 +190,14 @@ export default function Dashboard() {
     api.getRebookSuggestions()
       .then((data) => setRebookSuggestions(data.suggestions || []))
       .catch(console.error);
+    if (teacherProfile) {
+      api.getEarnings()
+        .then(data => setEarnings(data))
+        .catch(console.error);
+      api.getTeacher(teacherProfile.id)
+        .then(data => setTeacherTimeSlots(data.timeSlots || []))
+        .catch(console.error);
+    }
   };
 
   useEffect(() => {
@@ -292,6 +303,44 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Earnings */}
+      {teacherProfile && earnings && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h2 className="font-semibold mb-4">Earnings</h2>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-bold text-brand-600">£{earnings.monthEarnings.toFixed(0)}</p>
+              <p className="text-xs text-gray-400 mt-1">This month</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">£{earnings.totalEarnings.toFixed(0)}</p>
+              <p className="text-xs text-gray-400 mt-1">All time</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-orange-500">£{earnings.pendingEarnings.toFixed(0)}</p>
+              <p className="text-xs text-gray-400 mt-1">Pending</p>
+            </div>
+          </div>
+          {earnings.lessonCount > 0 && (
+            <p className="text-xs text-gray-400 text-center mt-3 pt-3 border-t border-gray-100">
+              {earnings.lessonCount} lesson{earnings.lessonCount !== 1 ? 's' : ''} completed
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Your Week calendar */}
+      {teacherProfile && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h2 className="font-semibold mb-4">Your Week</h2>
+          <CalendarView
+            timeSlots={teacherTimeSlots}
+            bookings={bookings.filter(b => b.my_role === 'teacher')}
+            compact
+          />
+        </div>
+      )}
+
       {/* Rebook nudge */}
       {rebookSuggestions.length > 0 && (
         <div className="mb-6">
@@ -368,6 +417,11 @@ export default function Dashboard() {
                     {booking.payment_status === 'refunded' && <span className="text-red-500 ml-1">(refunded)</span>}
                   </p>
                   {booking.notes && <p className="italic text-gray-400">"{booking.notes}"</p>}
+                  {booking.meeting_point && (
+                    <p className="text-sm text-gray-500">
+                      <span className="text-gray-400">Meeting at:</span> {booking.meeting_point}
+                    </p>
+                  )}
                 </div>
                 <div className="mt-3 flex gap-3 flex-wrap">
                   {!isMyStudentBooking && booking.status === 'awaiting_teacher' && (
@@ -380,12 +434,27 @@ export default function Dashboard() {
                     <span className="text-sm text-gray-500">Waiting for teacher to confirm</span>
                   )}
                   {booking.status === 'confirmed' && (
-                    <button
-                      onClick={() => handleCancel(booking.id)}
-                      className="text-sm text-red-500 hover:text-red-700"
-                    >
-                      Cancel booking
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleCancel(booking.id)}
+                        className="text-sm text-red-500 hover:text-red-700"
+                      >
+                        Cancel booking
+                      </button>
+                      <button
+                        onClick={() => {
+                          const point = prompt('Meeting point:', booking.meeting_point || '');
+                          if (point !== null && point.trim()) {
+                            api.updateMeetingPoint(booking.id, point.trim())
+                              .then(() => setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, meeting_point: point.trim() } : b)))
+                              .catch(err => alert(err.message));
+                          }
+                        }}
+                        className="text-sm text-brand-600 hover:text-brand-800"
+                      >
+                        {booking.meeting_point ? 'Update meeting point' : 'Set meeting point'}
+                      </button>
+                    </>
                   )}
                   {isMyStudentBooking && (booking.status === 'confirmed' || booking.status === 'completed') && !booking.has_review && (
                     <button

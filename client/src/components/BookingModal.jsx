@@ -82,6 +82,7 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
   const [selectedDate, setSelectedDate] = useState('');
   const [duration, setDuration] = useState(1);
   const [notes, setNotes] = useState('');
+  const [meetingPoint, setMeetingPoint] = useState('');
   const [error, setError] = useState('');
 
   // Stripe payment state
@@ -122,6 +123,7 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
         endTime,
         durationHours: duration,
         notes,
+        meetingPoint: meetingPoint.trim() || undefined,
       });
 
       setClientSecret(data.clientSecret);
@@ -206,6 +208,13 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="What would you like to focus on?"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none h-20" />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Point (optional)</label>
+              <input type="text" value={meetingPoint} onChange={(e) => setMeetingPoint(e.target.value)}
+                placeholder="e.g. Outside Costa Coffee, W1D 3AF"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </div>
 
             <div className="border-t border-gray-100 pt-4">

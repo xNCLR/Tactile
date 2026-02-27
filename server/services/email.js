@@ -106,4 +106,60 @@ async function sendPasswordResetEmail({ email, name, resetUrl }) {
   });
 }
 
-module.exports = { sendBookingConfirmation, sendBookingNotification, sendCancellationEmail, sendPasswordResetEmail };
+async function sendBookingAcceptedEmail({ studentEmail, studentName, teacherName, date, time }) {
+  return send({
+    to: studentEmail,
+    subject: `Lesson Confirmed — ${teacherName} accepted your booking`,
+    html: `<div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto;">
+      <h2 style="color: #e05e48;">Lesson Confirmed!</h2>
+      <p>Hi ${studentName},</p>
+      <p><strong>${teacherName}</strong> has accepted your lesson on <strong>${date}</strong> at <strong>${time}</strong>.</p>
+      <p style="color: #666; font-size: 14px;">You can message your teacher to discuss meeting location and what to bring.</p>
+      <p style="color: #999; font-size: 12px; margin-top: 24px;">— Tactile · In-person photography lessons in London</p>
+    </div>`,
+  });
+}
+
+async function sendBookingDeclinedEmail({ studentEmail, studentName, teacherName, date }) {
+  return send({
+    to: studentEmail,
+    subject: `Booking Update — ${teacherName}`,
+    html: `<div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto;">
+      <h2 style="color: #e05e48;">Booking Update</h2>
+      <p>Hi ${studentName},</p>
+      <p>Unfortunately, <strong>${teacherName}</strong> was unable to accept your lesson on <strong>${date}</strong>. A full refund has been processed.</p>
+      <p style="color: #666; font-size: 14px;">Don't worry — there are plenty of great teachers on Tactile. <a href="http://localhost:5173/search" style="color: #e05e48;">Find another teacher</a></p>
+      <p style="color: #999; font-size: 12px; margin-top: 24px;">— Tactile · In-person photography lessons in London</p>
+    </div>`,
+  });
+}
+
+async function sendInquiryReceivedEmail({ teacherEmail, teacherName, studentName }) {
+  return send({
+    to: teacherEmail,
+    subject: `New inquiry from ${studentName}`,
+    html: `<div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto;">
+      <h2 style="color: #e05e48;">New Inquiry</h2>
+      <p>Hi ${teacherName},</p>
+      <p><strong>${studentName}</strong> has sent you a message. Log in to Tactile to reply and potentially book a lesson.</p>
+      <p style="color: #999; font-size: 12px; margin-top: 24px;">— Tactile · In-person photography lessons in London</p>
+    </div>`,
+  });
+}
+
+async function sendReviewReceivedEmail({ teacherEmail, teacherName, studentName, rating }) {
+  const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  return send({
+    to: teacherEmail,
+    subject: `New ${rating}-star review from ${studentName}`,
+    html: `<div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto;">
+      <h2 style="color: #e05e48;">New Review</h2>
+      <p>Hi ${teacherName},</p>
+      <p><strong>${studentName}</strong> left you a <span style="color: #f59e0b;">${stars}</span> review.</p>
+      <p style="color: #666; font-size: 14px;">Log in to see the full review on your profile.</p>
+      <p style="color: #999; font-size: 12px; margin-top: 24px;">— Tactile · In-person photography lessons in London</p>
+    </div>`,
+  });
+}
+
+module.exports = { sendBookingConfirmation, sendBookingNotification, sendCancellationEmail, sendPasswordResetEmail, sendBookingAcceptedEmail, sendBookingDeclinedEmail, sendInquiryReceivedEmail, sendReviewReceivedEmail };

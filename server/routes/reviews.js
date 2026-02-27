@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
+const { createNotification } = require('../lib/notifications');
+const { sendReviewReceivedEmail } = require('../services/email');
 const logger = require('../lib/logger');
 const { validate, createReviewSchema } = require('../lib/validators');
 
@@ -33,6 +35,30 @@ router.post('/', authenticate, validate(createReviewSchema), async (req, res) =>
 
     // Mark booking as completed
     runSql(db, "UPDATE bookings SET status = 'completed' WHERE id = ?", [bookingId]);
+
+    // Notify teacher about the review
+    const teacher = queryOne(db, 'SELECT user_id FROM teacher_profiles WHERE id = ?', [booking.teacher_id]);
+    if (teacher) {
+      const teacherUser = queryOne(db, 'SELECT name, email FROM users WHERE id = ?', [teacher.user_id]);
+      if (teacherUser) {
+        // Send email notification
+        await sendReviewReceivedEmail({
+          teacherEmail: teacherUser.email,
+          teacherName: teacherUser.name,
+          studentName: student.name,
+          rating,
+        });
+
+        // Create in-app notification
+        await createNotification({
+          userId: teacher.user_id,
+          type: 'review_received',
+          title: `New ${rating}-star review`,
+          message: `${student.name} left you a review for your lesson`,
+          link: '/dashboard',
+        });
+      }
+    }
 
     res.status(201).json({ review: { id, booking_id: bookingId, rating, comment } });
   } catch (err) {

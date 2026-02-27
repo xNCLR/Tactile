@@ -77,6 +77,11 @@ const createIntentSchema = z.object({
   endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format: HH:MM'),
   durationHours: z.number().min(0.5).max(8),
   notes: z.string().max(500).optional(),
+  meetingPoint: z.string().max(200).optional(),
+});
+
+const updateMeetingPointSchema = z.object({
+  meetingPoint: z.string().min(1).max(200).trim(),
 });
 
 // ── Review schemas ──
@@ -148,6 +153,7 @@ module.exports = {
   updateTeacherProfileSchema,
   addTimeSlotSchema,
   createIntentSchema,
+  updateMeetingPointSchema,
   bookingAcceptSchema,
   bookingDeclineSchema,
   createReviewSchema,

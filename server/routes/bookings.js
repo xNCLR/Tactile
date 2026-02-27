@@ -3,16 +3,17 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb, queryOne, queryAll, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
 const { createPaymentIntent, refundPayment } = require('../services/stripe');
-const { sendBookingConfirmation, sendBookingNotification } = require('../services/email');
+const { sendBookingConfirmation, sendBookingNotification, sendBookingAcceptedEmail, sendBookingDeclinedEmail } = require('../services/email');
+const { createNotification } = require('../lib/notifications');
 const logger = require('../lib/logger');
-const { validate, createIntentSchema } = require('../lib/validators');
+const { validate, createIntentSchema, updateMeetingPointSchema } = require('../lib/validators');
 
 const router = express.Router();
 
 // POST /api/bookings/create-intent — Step 1: Create payment intent + pending booking
 router.post('/create-intent', authenticate, validate(createIntentSchema), async (req, res) => {
   try {
-    const { teacherId, bookingDate, startTime, endTime, durationHours, notes } = req.validated;
+    const { teacherId, bookingDate, startTime, endTime, durationHours, notes, meetingPoint } = req.validated;
     if (!teacherId || !bookingDate || !startTime || !endTime || !durationHours) {
       return res.status(400).json({ error: 'Missing required booking fields' });
     }
@@ -37,8 +38,8 @@ router.post('/create-intent', authenticate, validate(createIntentSchema), async 
 
     // Create pending booking
     const bookingId = uuidv4();
-    runSql(db, `INSERT INTO bookings (id, student_id, teacher_id, booking_date, start_time, end_time, duration_hours, total_price, status, payment_status, payment_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?)`,
-      [bookingId, req.user.id, teacherId, bookingDate, startTime, endTime, durationHours, totalPrice, payment.id, notes || null]);
+    runSql(db, `INSERT INTO bookings (id, student_id, teacher_id, booking_date, start_time, end_time, duration_hours, total_price, status, payment_status, payment_id, notes, meeting_point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
+      [bookingId, req.user.id, teacherId, bookingDate, startTime, endTime, durationHours, totalPrice, payment.id, notes || null, meetingPoint || null]);
 
     res.status(201).json({
       bookingId,
@@ -89,6 +90,15 @@ router.post('/confirm', authenticate, async (req, res) => {
       studentName: student.name,
       date: booking.booking_date,
       time: `${booking.start_time} - ${booking.end_time}`,
+    });
+
+    // Create notification for teacher
+    await createNotification({
+      userId: teacher.user_id,
+      type: 'booking_request',
+      title: 'New Booking Request',
+      message: `${student.name} wants to book a lesson on ${booking.booking_date} at ${booking.start_time}`,
+      link: '/dashboard',
     });
 
     res.json({
@@ -152,6 +162,30 @@ router.patch('/:id/accept', authenticate, async (req, res) => {
     }
 
     runSql(db, `UPDATE bookings SET status = 'confirmed', updated_at = datetime('now') WHERE id = ?`, [req.params.id]);
+
+    // Notify student that booking was accepted
+    const student = queryOne(db, 'SELECT name, email FROM users WHERE id = ?', [booking.student_id]);
+    const teacher = queryOne(db, 'SELECT u.name, u.email FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?', [booking.teacher_id]);
+    if (student && teacher) {
+      // Send email notification
+      await sendBookingAcceptedEmail({
+        studentEmail: student.email,
+        studentName: student.name,
+        teacherName: teacher.name,
+        date: booking.booking_date,
+        time: `${booking.start_time} - ${booking.end_time}`,
+      });
+
+      // Create in-app notification
+      await createNotification({
+        userId: booking.student_id,
+        type: 'booking_confirmed',
+        title: 'Booking Confirmed',
+        message: `${teacher.name} accepted your lesson on ${booking.booking_date} at ${booking.start_time}`,
+        link: '/dashboard',
+      });
+    }
+
     res.json({ message: 'Booking accepted', status: 'confirmed' });
   } catch (err) {
     logger.error('Accept booking error:', err);
@@ -181,6 +215,29 @@ router.patch('/:id/decline', authenticate, async (req, res) => {
     }
 
     runSql(db, `UPDATE bookings SET status = 'declined', payment_status = 'refunded', updated_at = datetime('now') WHERE id = ?`, [req.params.id]);
+
+    // Notify student that booking was declined
+    const student = queryOne(db, 'SELECT name, email FROM users WHERE id = ?', [booking.student_id]);
+    const teacher = queryOne(db, 'SELECT u.name FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?', [booking.teacher_id]);
+    if (student && teacher) {
+      // Send email notification
+      await sendBookingDeclinedEmail({
+        studentEmail: student.email,
+        studentName: student.name,
+        teacherName: teacher.name,
+        date: booking.booking_date,
+      });
+
+      // Create in-app notification
+      await createNotification({
+        userId: booking.student_id,
+        type: 'booking_declined',
+        title: 'Booking Update',
+        message: `${teacher.name} was unable to accept your lesson on ${booking.booking_date}. A full refund has been processed.`,
+        link: '/search',
+      });
+    }
+
     res.json({ message: 'Booking declined and refunded', status: 'declined' });
   } catch (err) {
     logger.error('Decline booking error:', err);
@@ -273,6 +330,45 @@ router.get('/rebook-suggestions', authenticate, async (req, res) => {
   } catch (err) {
     logger.error('Rebook suggestions error:', err);
     res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
+// PATCH /api/bookings/:id/meeting-point — update meeting point
+router.patch('/:id/meeting-point', authenticate, validate(updateMeetingPointSchema), async (req, res) => {
+  try {
+    const { meetingPoint } = req.validated;
+    if (!meetingPoint?.trim()) return res.status(400).json({ error: 'Meeting point is required' });
+
+    const db = await getDb();
+    const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ?', [req.params.id]);
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (booking.student_id !== req.user.id && (!profile || booking.teacher_id !== profile.id)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    runSql(db, 'UPDATE bookings SET meeting_point = ?, updated_at = datetime(\'now\') WHERE id = ?',
+      [meetingPoint.trim(), req.params.id]);
+
+    // Notify other party
+    const otherUserId = booking.student_id === req.user.id
+      ? queryOne(db, 'SELECT user_id FROM teacher_profiles WHERE id = ?', [booking.teacher_id])?.user_id
+      : booking.student_id;
+    if (otherUserId) {
+      await createNotification({
+        userId: otherUserId,
+        type: 'meeting_point',
+        title: 'Meeting Point Updated',
+        message: `Meeting point set to: ${meetingPoint.trim()}`,
+        link: '/dashboard',
+      });
+    }
+
+    res.json({ meetingPoint: meetingPoint.trim() });
+  } catch (err) {
+    logger.error('Meeting point update error:', err);
+    res.status(500).json({ error: 'Failed to update meeting point' });
   }
 });
 

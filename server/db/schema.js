@@ -123,6 +123,7 @@ async function initDb() {
     payment_status TEXT DEFAULT 'pending' CHECK(payment_status IN ('pending', 'paid', 'refunded')),
     payment_id TEXT,
     notes TEXT,
+    meeting_point TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
@@ -170,6 +171,17 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    link TEXT,
+    read INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   // ── Indexes ──
 
   db.run('CREATE INDEX IF NOT EXISTS idx_teacher_profiles_user_id ON teacher_profiles(user_id)');
@@ -189,6 +201,8 @@ async function initDb() {
   db.run('CREATE INDEX IF NOT EXISTS idx_messages_teacher_profile ON messages(teacher_profile_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_id, read)');
 
   saveDbSync();
   console.log('Database initialized successfully');

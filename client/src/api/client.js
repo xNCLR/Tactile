@@ -106,4 +106,15 @@ export const api = {
   // Inquiry messaging (pre-booking)
   sendInquiry: (teacherProfileId, content) => request(`/messages/inquiry/${teacherProfileId}`, { method: 'POST', body: JSON.stringify({ content }) }),
   getInquiryMessages: (teacherProfileId) => request(`/messages/inquiry/${teacherProfileId}`),
+
+  // Notifications
+  getNotifications: () => request('/notifications'),
+  getUnreadCount: () => request('/notifications/unread-count'),
+  markNotificationsRead: () => request('/notifications/read-all', { method: 'PATCH' }),
+
+  // Earnings
+  getEarnings: () => request('/earnings'),
+
+  // Meeting point
+  updateMeetingPoint: (bookingId, meetingPoint) => request(`/bookings/${bookingId}/meeting-point`, { method: 'PATCH', body: JSON.stringify({ meetingPoint }) }),
 };
