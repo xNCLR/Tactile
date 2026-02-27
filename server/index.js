@@ -39,26 +39,28 @@ app.use('/api/webhooks', webhookRoutes);
 
 app.use(express.json({ limit: '1mb' }));
 
-// Rate limiting
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later' },
-});
+// Rate limiting (disabled in test mode)
+if (config.NODE_ENV !== 'test') {
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later' },
+  });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 15, // Stricter for auth endpoints
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many login attempts, please try again later' },
-});
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15, // Stricter for auth endpoints
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many login attempts, please try again later' },
+  });
 
-app.use('/api', apiLimiter);
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
+  app.use('/api', apiLimiter);
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/register', authLimiter);
+}
 
 // ── Request logging ──
 
@@ -119,6 +121,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Serve client in production
+if (config.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 // ── Global error handler ──
 
 app.use((err, req, res, _next) => {
@@ -135,7 +146,11 @@ async function start() {
   });
 }
 
-start().catch((err) => {
-  logger.fatal(err, 'Failed to start server');
-  process.exit(1);
-});
+if (require.main === module) {
+  start().catch((err) => {
+    logger.fatal(err, 'Failed to start server');
+    process.exit(1);
+  });
+}
+
+module.exports = { app, start };

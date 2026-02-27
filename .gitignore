@@ -2,5 +2,8 @@ node_modules/
 dist/
 .env
 *.db
+test-tactile.db
 .DS_Store
 server/uploads/
+server/:memory:
+server/__tests__/

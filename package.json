@@ -6,9 +6,17 @@
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
     "install:all": "npm install && cd server && npm install && cd ../client && npm install",
-    "seed": "cd server && node db/seed.js"
+    "seed": "cd server && node db/seed.js",
+    "test": "jest --forceExit --detectOpenHandles server/tests/"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/server/tests/**/*.test.js"],
+    "testTimeout": 10000
   }
 }
