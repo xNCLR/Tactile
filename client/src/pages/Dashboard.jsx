@@ -3,11 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
 
-const BADGE_ICONS = {
-  camera: '\u{1F4F7}', star: '\u{2B50}', trophy: '\u{1F3C6}', message: '\u{1F4AC}', megaphone: '\u{1F4E3}',
-  mortarboard: '\u{1F393}', sparkles: '\u{2728}', fire: '\u{1F525}', crown: '\u{1F451}', image: '\u{1F5BC}',
-};
-
 function DisputeModal({ booking, onClose, onSubmit }) {
   const [reason, setReason] = useState('');
   const [refundType, setRefundType] = useState('full');
@@ -179,8 +174,6 @@ export default function Dashboard() {
   const [disputeBooking, setDisputeBooking] = useState(null);
   const [respondDispute, setRespondDispute] = useState(null);
   const [disputes, setDisputes] = useState({ asStudent: [], asTeacher: [] });
-  const [badges, setBadges] = useState([]);
-  const [nextBadges, setNextBadges] = useState([]);
 
   const loadData = () => {
     api.getBookings()
@@ -194,12 +187,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
-    if (user?.id) {
-      api.getBadges(user.id)
-        .then((data) => { setBadges(data.badges); setNextBadges(data.nextBadges); })
-        .catch(console.error);
-    }
-  }, [user?.id]);
+  }, []);
 
   const handleCancel = async (bookingId) => {
     if (!confirm('Cancel this booking? A refund will be processed.')) return;
@@ -214,8 +202,6 @@ export default function Dashboard() {
   const handleReviewSubmitted = () => {
     setReviewBooking(null);
     setBookings((prev) => prev.map((b) => (b.id === reviewBooking?.id ? { ...b, status: 'completed', has_review: 1 } : b)));
-    // Refresh badges after review
-    if (user?.id) api.getBadges(user.id).then((data) => { setBadges(data.badges); setNextBadges(data.nextBadges); }).catch(() => {});
   };
 
   const handleDisputeSubmitted = () => {
@@ -384,34 +370,6 @@ export default function Dashboard() {
             ))}
           </div>
         </>
-      )}
-
-      {/* Badges Section */}
-      {badges.length > 0 && (
-        <>
-          <h2 className="font-semibold mt-8 mb-4">Your Badges</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
-            {badges.map((badge) => (
-              <div key={badge.id} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-                <div className="text-2xl mb-1">{BADGE_ICONS[badge.icon] || '\u{1F3C5}'}</div>
-                <p className="text-sm font-medium">{badge.name}</p>
-                <p className="text-xs text-gray-400">{badge.desc}</p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {nextBadges.length > 0 && (
-        <div className="mt-3 mb-6">
-          <p className="text-xs text-gray-400 mb-2">Up next:</p>
-          <div className="flex flex-wrap gap-2">
-            {nextBadges.map((badge) => (
-              <span key={badge.id} className="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
-                {BADGE_ICONS[badge.icon] || '\u{1F3C5}'} {badge.name}
-              </span>
-            ))}
-          </div>
-        </div>
       )}
 
       {reviewBooking && (
