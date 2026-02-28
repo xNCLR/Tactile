@@ -15,6 +15,28 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Truncate postcode: "SW1A 1AA" → "SW1A" (outward code only)
+function truncatePostcode(postcode) {
+  if (!postcode) return null;
+  const parts = postcode.trim().split(/\s+/);
+  return parts[0] || null;
+}
+
+// Add deterministic noise to coordinates for privacy (~300-500m offset)
+// Uses a simple hash of the teacher's profile_id so noise is stable per teacher
+function addLocationNoise(lat, lng, seed) {
+  if (lat == null || lng == null) return { lat, lng };
+  // Simple numeric hash from seed string
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  }
+  // ±0.003 degrees ≈ ±250-350m
+  const latNoise = ((hash % 600) - 300) / 100000;
+  const lngNoise = (((hash >> 8) % 600) - 300) / 100000;
+  return { lat: lat + latNoise, lng: lng + lngNoise };
+}
+
 // GET /api/teachers/categories
 router.get('/categories', async (req, res) => {
   try {
@@ -30,7 +52,7 @@ router.get('/categories', async (req, res) => {
 // GET /api/teachers/search
 router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (req, res) => {
   try {
-    const { lat, lng, radius = 10, sort = 'distance', availability, category, q } = req.validatedQuery;
+    const { lat, lng, radius = 10, sort = 'distance', availability, category, q, bounds } = req.validatedQuery;
     const db = await getDb();
 
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
@@ -59,13 +81,28 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
     if (q) params.push(`%${q}%`);
     const teachers = queryAll(db, query, params);
 
-    let results = teachers.map((t) => ({
-      ...t,
-      categories: t.categories ? t.categories.split(',') : [],
-      distance: lat && lng ? haversineDistance(parseFloat(lat), parseFloat(lng), t.latitude, t.longitude) : null,
-    }));
+    let results = teachers.map((t) => {
+      const noisy = addLocationNoise(t.latitude, t.longitude, t.profile_id);
+      return {
+        ...t,
+        postcode: truncatePostcode(t.postcode),
+        latitude: noisy.lat,
+        longitude: noisy.lng,
+        categories: t.categories ? t.categories.split(',') : [],
+        distance: lat && lng ? haversineDistance(parseFloat(lat), parseFloat(lng), t.latitude, t.longitude) : null,
+      };
+    });
 
-    if (lat && lng && radius) {
+    // If bounds provided (map view), filter by visible map area instead of radius
+    if (bounds) {
+      const [south, west, north, east] = bounds.split(',').map(Number);
+      if (!isNaN(south) && !isNaN(west) && !isNaN(north) && !isNaN(east)) {
+        results = results.filter((t) => {
+          if (t.latitude == null || t.longitude == null) return false;
+          return t.latitude >= south && t.latitude <= north && t.longitude >= west && t.longitude <= east;
+        });
+      }
+    } else if (lat && lng && radius) {
       const searchRadius = parseFloat(radius);
       results = results.filter((t) => {
         if (t.distance === null) return false;
@@ -107,8 +144,13 @@ router.get('/:id', async (req, res) => {
 
     const timeSlots = queryAll(db, `SELECT id, day_of_week, start_time, end_time, is_available FROM time_slots WHERE teacher_id = ? AND is_available = 1 ORDER BY day_of_week, start_time`, [req.params.id]);
 
+    // Apply privacy: truncate postcode and add location noise
+    const noisy = addLocationNoise(teacher.latitude, teacher.longitude, teacher.profile_id);
     const teacherData = {
       ...teacher,
+      postcode: truncatePostcode(teacher.postcode),
+      latitude: noisy.lat,
+      longitude: noisy.lng,
       categories: teacher.categories ? teacher.categories.split(',') : [],
     };
 

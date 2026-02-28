@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { api } from '../api/client';
 import TeacherCard from '../components/TeacherCard';
 import usePageMeta from '../hooks/usePageMeta';
@@ -11,6 +11,7 @@ export default function Search() {
     description: 'Browse photography teachers in London. Filter by specialties, availability, and location. Book your lesson today.',
   });
   const [teachers, setTeachers] = useState([]);
+  const [mapTeachers, setMapTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [location, setLocation] = useState(null);
@@ -20,42 +21,33 @@ export default function Search() {
   const [categories, setCategories] = useState([]);
   const [category, setCategory] = useState('');
   const [view, setView] = useState('list');
+  const boundsTimerRef = useRef(null);
 
   useEffect(() => {
-    // Fetch categories
     api.getCategories()
       .then(data => setCategories(data.categories))
       .catch(console.error);
 
-    // Try to get user's location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => {
-          // Default to central London if denied
-          setLocation({ lat: 51.5074, lng: -0.1278 });
-        }
+        () => setLocation({ lat: 51.5074, lng: -0.1278 })
       );
     } else {
       setLocation({ lat: 51.5074, lng: -0.1278 });
     }
   }, []);
 
+  // Fetch for list view (radius-based)
   useEffect(() => {
     if (!location) return;
 
     const fetchTeachers = async () => {
       setLoading(true);
       try {
-        const params = {
-          lat: location.lat,
-          lng: location.lng,
-          radius,
-          sort,
-        };
+        const params = { lat: location.lat, lng: location.lng, radius, sort };
         if (availability) params.availability = availability;
         if (category) params.category = category;
-
         const data = await api.searchTeachers(params);
         setTeachers(data.teachers);
       } catch (err) {
@@ -67,6 +59,33 @@ export default function Search() {
 
     fetchTeachers();
   }, [location, radius, sort, availability, category]);
+
+  // Fetch for map view (bounds-based) — debounced
+  const fetchMapTeachers = useCallback(async (bounds) => {
+    if (!location) return;
+    try {
+      const params = {
+        lat: location.lat,
+        lng: location.lng,
+        bounds: `${bounds.south},${bounds.west},${bounds.north},${bounds.east}`,
+        sort,
+      };
+      if (availability) params.availability = availability;
+      if (category) params.category = category;
+      const data = await api.searchTeachers(params);
+      setMapTeachers(data.teachers);
+    } catch (err) {
+      console.error('Map fetch error:', err);
+    }
+  }, [location, sort, availability, category]);
+
+  const handleBoundsChange = useCallback((bounds) => {
+    // Debounce: wait 300ms after last pan/zoom before fetching
+    if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
+    boundsTimerRef.current = setTimeout(() => fetchMapTeachers(bounds), 300);
+  }, [fetchMapTeachers]);
+
+  const activeTeachers = view === 'map' ? mapTeachers : teachers;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -117,22 +136,24 @@ export default function Search() {
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Filters — hide radius when in map view since the map bounds replace it */}
       <div className="flex flex-wrap items-center gap-4 mb-6 bg-white p-4 rounded-xl border border-gray-200">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Radius:</label>
-          <select
-            value={radius}
-            onChange={(e) => setRadius(Number(e.target.value))}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-          >
-            <option value={2}>2 km</option>
-            <option value={5}>5 km</option>
-            <option value={10}>10 km</option>
-            <option value={25}>25 km</option>
-            <option value={50}>50 km</option>
-          </select>
-        </div>
+        {view === 'list' && (
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Radius:</label>
+            <select
+              value={radius}
+              onChange={(e) => setRadius(Number(e.target.value))}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+            >
+              <option value={2}>2 km</option>
+              <option value={5}>5 km</option>
+              <option value={10}>10 km</option>
+              <option value={25}>25 km</option>
+              <option value={50}>50 km</option>
+            </select>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <label className="text-sm text-gray-600">Sort by:</label>
@@ -162,28 +183,32 @@ export default function Search() {
 
       {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</div>}
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Searching for teachers near you...</div>
-      ) : teachers.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 mb-2">No teachers found within {radius} km.</p>
-          <p className="text-sm text-gray-400">Try increasing the search radius.</p>
-        </div>
-      ) : (
-        <>
-          <p className="text-sm text-gray-400 mb-4">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''} found</p>
-
-          {view === 'list' ? (
+      {view === 'list' ? (
+        loading ? (
+          <div className="text-center py-12 text-gray-400">Searching for teachers near you...</div>
+        ) : teachers.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 mb-2">No teachers found within {radius} km.</p>
+            <p className="text-sm text-gray-400">Try increasing the search radius.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-gray-400 mb-4">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''} found</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {teachers.map((teacher) => (
                 <TeacherCard key={teacher.profile_id} teacher={teacher} />
               ))}
             </div>
-          ) : (
-            <Suspense fallback={<div className="text-center py-12 text-gray-400">Loading map...</div>}>
-              <TeacherMap teachers={teachers} center={location} />
-            </Suspense>
+          </>
+        )
+      ) : (
+        <>
+          {mapTeachers.length > 0 && (
+            <p className="text-sm text-gray-400 mb-4">{mapTeachers.length} teacher{mapTeachers.length !== 1 ? 's' : ''} in view</p>
           )}
+          <Suspense fallback={<div className="text-center py-12 text-gray-400">Loading map...</div>}>
+            <TeacherMap teachers={mapTeachers} center={location} onBoundsChange={handleBoundsChange} />
+          </Suspense>
         </>
       )}
     </div>

@@ -50,6 +50,7 @@ const searchTeachersSchema = z.object({
   availability: z.enum(['weekdays', 'weekends', '']).optional(),
   category: z.string().max(50).optional(),
   q: z.string().max(200).optional(),
+  bounds: z.string().max(100).optional(), // "south,west,north,east" for map view
 });
 
 const updateTeacherProfileSchema = z.object({
