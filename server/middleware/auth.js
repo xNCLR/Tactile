@@ -40,15 +40,18 @@ function optionalAuth(req, res, next) {
 
 // Middleware: require user to have a teacher profile
 function requireTeacherProfile(req, res, next) {
-  const { getDb, queryOne } = require('../db/schema');
-  getDb().then((db) => {
+  try {
+    const { getDb, queryOne } = require('../db/schema');
+    const db = getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) {
       return res.status(403).json({ error: 'Teacher profile required. Set up your teaching profile first.' });
     }
     req.teacherProfile = profile;
     next();
-  }).catch(() => res.status(500).json({ error: 'Server error' }));
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 }
 
 module.exports = { generateToken, authenticate, optionalAuth, requireTeacherProfile };

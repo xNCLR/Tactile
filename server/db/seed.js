@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const { getDb, initDb, runSql, saveDb, saveDbSync } = require('./schema');
+const { getDb, initDb, runSql } = require('./schema');
 
 const CATEGORIES = [
   { name: 'Portrait', slug: 'portrait' },
@@ -61,30 +61,30 @@ const TIME_SLOTS = [
   { day: 0, start: '10:00', end: '15:00' },
 ];
 
-async function seed() {
-  await initDb();
-  const db = await getDb();
+function seed() {
+  initDb();
+  const db = getDb();
   const passwordHash = bcrypt.hashSync('password123', 10);
 
   // Clear existing data
-  db.run('DELETE FROM shortlist');
-  db.run('DELETE FROM teacher_categories');
-  db.run('DELETE FROM disputes');
-  db.run('DELETE FROM messages');
-  db.run('DELETE FROM reviews');
-  db.run('DELETE FROM bookings');
-  db.run('DELETE FROM time_slots');
-  db.run('DELETE FROM teacher_profiles');
-  db.run('DELETE FROM categories');
-  db.run('DELETE FROM password_reset_tokens');
-  db.run('DELETE FROM users');
+  runSql(db, 'DELETE FROM shortlist');
+  runSql(db, 'DELETE FROM teacher_categories');
+  runSql(db, 'DELETE FROM disputes');
+  runSql(db, 'DELETE FROM messages');
+  runSql(db, 'DELETE FROM reviews');
+  runSql(db, 'DELETE FROM bookings');
+  runSql(db, 'DELETE FROM time_slots');
+  runSql(db, 'DELETE FROM teacher_profiles');
+  runSql(db, 'DELETE FROM categories');
+  runSql(db, 'DELETE FROM password_reset_tokens');
+  runSql(db, 'DELETE FROM users');
 
   // Seed categories
   const categoryIds = {};
   for (const cat of CATEGORIES) {
     const id = uuidv4();
     categoryIds[cat.slug] = id;
-    db.run('INSERT INTO categories (id, name, slug) VALUES (?, ?, ?)', [id, cat.name, cat.slug]);
+    runSql(db, 'INSERT INTO categories (id, name, slug) VALUES (?, ?, ?)', [id, cat.name, cat.slug]);
   }
 
   // Create users with teaching profiles and store their profile IDs
@@ -94,16 +94,16 @@ async function seed() {
     const profileId = uuidv4();
     teacherProfileIds.push(profileId);
 
-    db.run(`INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    runSql(db, `INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [userId, t.email, passwordHash, t.name, 'user', t.phone, t.postcode, t.lat, t.lng]);
 
-    db.run(`INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours, first_lesson_discount, bulk_discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours, first_lesson_discount, bulk_discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [profileId, userId, t.bio, t.rate, t.equipment, t.weekdays, t.weekends, t.travelRadius || 10, t.cancelHours || 24, t.firstLessonDiscount || 0, t.bulkDiscount || 0]);
 
     // Link categories
     for (const slug of (t.categories || [])) {
       if (categoryIds[slug]) {
-        db.run('INSERT INTO teacher_categories (teacher_id, category_id) VALUES (?, ?)', [profileId, categoryIds[slug]]);
+        runSql(db, 'INSERT INTO teacher_categories (teacher_id, category_id) VALUES (?, ?)', [profileId, categoryIds[slug]]);
       }
     }
 
@@ -111,7 +111,7 @@ async function seed() {
       const isWeekend = slot.day === 0 || slot.day === 6;
       if (isWeekend && !t.weekends) continue;
       if (!isWeekend && !t.weekdays) continue;
-      db.run(`INSERT INTO time_slots (id, teacher_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)`,
+      runSql(db, `INSERT INTO time_slots (id, teacher_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)`,
         [uuidv4(), profileId, slot.day, slot.start, slot.end]);
     }
   }
@@ -121,7 +121,7 @@ async function seed() {
   for (const s of USERS_WITHOUT_TEACHING) {
     const userId = uuidv4();
     studentUserIds.push(userId);
-    db.run(`INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    runSql(db, `INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [userId, s.email, passwordHash, s.name, 'user', s.phone, s.postcode, s.lat, s.lng]);
   }
 
@@ -129,20 +129,19 @@ async function seed() {
   if (studentUserIds.length > 0 && teacherProfileIds.length > 0) {
     // First student likes first 3 teachers
     for (let i = 0; i < Math.min(3, teacherProfileIds.length); i++) {
-      db.run('INSERT INTO shortlist (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
+      runSql(db, 'INSERT INTO shortlist (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
         [uuidv4(), studentUserIds[0], teacherProfileIds[i]]);
     }
 
     // Second student likes last 2 teachers
     if (studentUserIds.length > 1 && teacherProfileIds.length > 2) {
       for (let i = teacherProfileIds.length - 2; i < teacherProfileIds.length; i++) {
-        db.run('INSERT INTO shortlist (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
+        runSql(db, 'INSERT INTO shortlist (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
           [uuidv4(), studentUserIds[1], teacherProfileIds[i]]);
       }
     }
   }
 
-  saveDbSync();
   console.log('Seed data inserted successfully!');
   console.log(`  ${CATEGORIES.length} photography categories`);
   console.log(`  ${USERS_WITH_TEACHING.length} users with teaching profiles`);
@@ -152,4 +151,4 @@ async function seed() {
   console.log('  Login with any email above + password: password123');
 }
 
-seed().catch(console.error);
+seed();
