@@ -101,7 +101,7 @@ export const api = {
   getBadges: (userId) => request(`/badges/${userId}`),
 
   // Categories
-  getCategories: () => request('/categories'),
+  getCategories: () => request('/teachers/categories'),
 
   // Booking acceptance (teacher actions)
   acceptBooking: (id) => request(`/bookings/${id}/accept`, { method: 'PATCH' }),

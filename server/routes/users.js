@@ -3,6 +3,7 @@ const { getDb, queryOne, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
 const logger = require('../lib/logger');
 const { validate, updateProfileSchema } = require('../lib/validators');
+const config = require('../config');
 
 const router = express.Router();
 
@@ -19,7 +20,8 @@ router.put('/profile', authenticate, validate(updateProfileSchema), async (req, 
     res.json({ user });
   } catch (err) {
     logger.error('Profile update error:', err);
-    res.status(500).json({ error: 'Failed to update profile' });
+    const detail = config.NODE_ENV !== 'production' ? ` (${err.message})` : '';
+    res.status(500).json({ error: `Failed to update profile${detail}` });
   }
 });
 

@@ -3,6 +3,7 @@ const { getDb, queryAll, queryOne, runSql, transaction } = require('../db/schema
 const { authenticate, optionalAuth, requireTeacherProfile } = require('../middleware/auth');
 const logger = require('../lib/logger');
 const { validate, validateQuery, searchTeachersSchema, updateTeacherProfileSchema, addTimeSlotSchema } = require('../lib/validators');
+const config = require('../config');
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 router.get('/categories', async (req, res) => {
   try {
     const db = await getDb();
-    const categories = queryAll(db, 'SELECT id, slug, name, description FROM categories ORDER BY name');
+    const categories = queryAll(db, 'SELECT id, slug, name FROM categories ORDER BY name');
     res.json({ categories });
   } catch (err) {
     logger.error('Categories fetch error:', err);
@@ -168,7 +169,8 @@ router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async
     res.json({ profile: result });
   } catch (err) {
     logger.error('Profile update error:', err);
-    res.status(500).json({ error: 'Failed to update profile' });
+    const detail = config.NODE_ENV !== 'production' ? ` (${err.message})` : '';
+    res.status(500).json({ error: `Failed to update profile${detail}` });
   }
 });
 
