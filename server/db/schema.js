@@ -1,14 +1,15 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', process.env.DB_PATH || 'tactile.db');
+const RAW_DB_PATH = process.env.DB_PATH || 'tactile.db';
+const DB_PATH = RAW_DB_PATH === ':memory:' ? ':memory:' : path.join(__dirname, '..', RAW_DB_PATH);
 
 let dbInstance = null;
 
 function getDb() {
   if (dbInstance) return dbInstance;
 
-  dbInstance = new Database(DB_PATH === ':memory:' ? ':memory:' : DB_PATH);
+  dbInstance = new Database(DB_PATH);
 
   // Performance & safety pragmas
   dbInstance.pragma('journal_mode = WAL');
