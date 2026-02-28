@@ -136,7 +136,7 @@ router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async
           first_lesson_discount = COALESCE(?, first_lesson_discount),
           bulk_discount = COALESCE(?, bulk_discount),
           updated_at = datetime('now') WHERE user_id = ?`,
-          [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, searchRadiusKm || null, cancellationHours || null, firstLessonDiscount || null, bulkDiscount || null, req.user.id]);
+          [bio ?? null, hourlyRate ?? null, equipmentRequirements ?? null, availableWeekdays !== undefined ? (availableWeekdays ? 1 : 0) : null, availableWeekends !== undefined ? (availableWeekends ? 1 : 0) : null, searchRadiusKm ?? null, cancellationHours ?? null, firstLessonDiscount ?? null, bulkDiscount ?? null, req.user.id]);
       } else {
         // Create new teacher profile
         const { v4: uuidv4 } = require('uuid');
@@ -156,9 +156,8 @@ router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async
         for (const slug of categories) {
           const cat = queryOne(db, 'SELECT id FROM categories WHERE slug = ?', [slug]);
           if (cat) {
-            const { v4: uuidv4 } = require('uuid');
-            runSql(db, 'INSERT INTO teacher_categories (id, teacher_id, category_id) VALUES (?, ?, ?)',
-              [uuidv4(), updatedProfile.id, cat.id]);
+            runSql(db, 'INSERT INTO teacher_categories (teacher_id, category_id) VALUES (?, ?)',
+              [updatedProfile.id, cat.id]);
           }
         }
       }

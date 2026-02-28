@@ -9,11 +9,11 @@ const router = express.Router();
 // PUT /api/users/profile
 router.put('/profile', authenticate, validate(updateProfileSchema), async (req, res) => {
   try {
-    const { name, phone, postcode, latitude, longitude } = req.validated;
+    const { name, phone, postcode } = req.validated;
     const db = await getDb();
 
-    runSql(db, `UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone), postcode = COALESCE(?, postcode), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude), updated_at = datetime('now') WHERE id = ?`,
-      [name, phone, postcode, latitude, longitude, req.user.id]);
+    runSql(db, `UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone), postcode = COALESCE(?, postcode), updated_at = datetime('now') WHERE id = ?`,
+      [name || null, phone || null, postcode || null, req.user.id]);
 
     const user = queryOne(db, 'SELECT id, email, name, role, phone, postcode, latitude, longitude FROM users WHERE id = ?', [req.user.id]);
     res.json({ user });
