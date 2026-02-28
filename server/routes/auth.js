@@ -9,6 +9,10 @@ const config = require('../config');
 const logger = require('../lib/logger');
 const { validate, registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../lib/validators');
 
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = config.GOOGLE_CLIENT_ID ? new OAuth2Client(config.GOOGLE_CLIENT_ID) : null;
+
 const router = express.Router();
 
 // POST /api/auth/register
@@ -117,6 +121,100 @@ router.post('/login', validate(loginSchema), async (req, res) => {
   } catch (err) {
     logger.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// GET /api/auth/google-client-id
+router.get('/google-client-id', (req, res) => {
+  res.json({ clientId: config.GOOGLE_CLIENT_ID || null });
+});
+
+// POST /api/auth/google
+router.post('/google', async (req, res) => {
+  try {
+    if (!googleClient) {
+      return res.status(501).json({ error: 'Google login is not configured' });
+    }
+
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ error: 'Google credential is required' });
+    }
+
+    // Verify the Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: config.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Google account must have an email address' });
+    }
+
+    const db = await getDb();
+
+    // Check if user already exists (by Google OAuth ID or by email)
+    let user = queryOne(db, 'SELECT * FROM users WHERE oauth_provider = ? AND oauth_id = ?', ['google', googleId]);
+
+    if (!user) {
+      // Check if email already registered (e.g. with password)
+      user = queryOne(db, 'SELECT * FROM users WHERE email = ?', [email]);
+
+      if (user) {
+        // Link Google to existing account
+        runSql(db, "UPDATE users SET oauth_provider = 'google', oauth_id = ?, updated_at = datetime('now') WHERE id = ?",
+          [googleId, user.id]);
+      } else {
+        // Create new user — set a random unusable password hash
+        const userId = uuidv4();
+        const randomHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 4);
+
+        runSql(db, `INSERT INTO users (id, email, password_hash, name, role, profile_photo, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [userId, email, randomHash, name || 'User', 'user', picture || null, 'google', googleId]);
+
+        user = queryOne(db, 'SELECT * FROM users WHERE id = ?', [userId]);
+      }
+    }
+
+    const teacherProfile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+
+    // Generate tokens (same as regular login)
+    const accessToken = generateAccessToken(user);
+    const refreshTokenValue = generateRefreshToken();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+
+    runSql(db, 'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), user.id, refreshTokenValue, refreshTokenExpiresAt]);
+
+    // Set cookies
+    const isProduction = config.NODE_ENV === 'production';
+    res.cookie('tactile_access', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000,
+    });
+    res.cookie('tactile_refresh', refreshTokenValue, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/api/auth',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
+    res.json({
+      user: { id: user.id, email: user.email, name: user.name, postcode: user.postcode, phone: user.phone, profilePhoto: user.profile_photo, isTeacher: !!teacherProfile },
+      teacherProfile,
+    });
+  } catch (err) {
+    logger.error('Google auth error:', err);
+    if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
+      return res.status(401).json({ error: 'Invalid or expired Google credential' });
+    }
+    res.status(500).json({ error: 'Google login failed' });
   }
 });
 

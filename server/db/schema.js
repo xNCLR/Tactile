@@ -213,6 +213,11 @@ function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)');
 
+  // OAuth columns (added post-initial schema)
+  try { db.exec('ALTER TABLE users ADD COLUMN oauth_provider TEXT'); } catch (e) { /* column exists */ }
+  try { db.exec('ALTER TABLE users ADD COLUMN oauth_id TEXT'); } catch (e) { /* column exists */ }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth ON users(oauth_provider, oauth_id)');
+
   console.log('Database initialized successfully');
 }
 

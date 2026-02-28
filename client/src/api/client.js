@@ -53,6 +53,8 @@ export const api = {
   register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => request('/auth/me'),
   logout: () => request('/auth/logout', { method: 'POST' }),
+  getGoogleClientId: () => request('/auth/google-client-id'),
+  googleLogin: (credential) => request('/auth/google', { method: 'POST', body: JSON.stringify({ credential }) }),
 
   // Teachers
   searchTeachers: (params) => {

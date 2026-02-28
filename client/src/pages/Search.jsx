@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { api } from '../api/client';
 import TeacherCard from '../components/TeacherCard';
 import usePageMeta from '../hooks/usePageMeta';
+
+const TeacherMap = lazy(() => import('../components/TeacherMap'));
 
 export default function Search() {
   usePageMeta({
@@ -17,6 +19,7 @@ export default function Search() {
   const [availability, setAvailability] = useState('');
   const [categories, setCategories] = useState([]);
   const [category, setCategory] = useState('');
+  const [view, setView] = useState('list');
 
   useEffect(() => {
     // Fetch categories
@@ -67,7 +70,44 @@ export default function Search() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Photography Teachers in London</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Photography Teachers in London</h1>
+
+        {/* View toggle */}
+        <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <button
+            onClick={() => setView('list')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              view === 'list'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+              List
+            </span>
+          </button>
+          <button
+            onClick={() => setView('map')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              view === 'map'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Map
+            </span>
+          </button>
+        </div>
+      </div>
 
       {/* Category Filter */}
       <div className="flex gap-2 overflow-x-auto pb-3 mb-4 -mx-4 px-4 scrollbar-hide">
@@ -132,11 +172,18 @@ export default function Search() {
       ) : (
         <>
           <p className="text-sm text-gray-400 mb-4">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''} found</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teachers.map((teacher) => (
-              <TeacherCard key={teacher.profile_id} teacher={teacher} />
-            ))}
-          </div>
+
+          {view === 'list' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {teachers.map((teacher) => (
+                <TeacherCard key={teacher.profile_id} teacher={teacher} />
+              ))}
+            </div>
+          ) : (
+            <Suspense fallback={<div className="text-center py-12 text-gray-400">Loading map...</div>}>
+              <TeacherMap teachers={teachers} center={location} />
+            </Suspense>
+          )}
         </>
       )}
     </div>

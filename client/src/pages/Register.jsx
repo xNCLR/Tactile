@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import GoogleSignIn from '../components/GoogleSignIn';
 
 export default function Register() {
   const { register } = useAuth();
@@ -38,6 +39,20 @@ export default function Register() {
       <p className="text-sm text-gray-500 text-center mb-6">Book lessons or share your photography skills — or both.</p>
 
       {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</div>}
+
+      <GoogleSignIn
+        onSuccess={(data) => {
+          window.location.href = '/dashboard';
+        }}
+        onError={(msg) => setError(msg)}
+        text="signup_with"
+      />
+
+      <div className="flex items-center gap-3 my-5">
+        <div className="flex-1 h-px bg-gray-200" />
+        <span className="text-xs text-gray-400">or</span>
+        <div className="flex-1 h-px bg-gray-200" />
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

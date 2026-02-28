@@ -61,7 +61,7 @@ export default function Layout({ children }) {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <nav className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="text-xl font-bold text-brand-600 tracking-tight">
-            tactile
+            Tactile
           </Link>
 
           {/* Desktop nav */}

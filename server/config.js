@@ -22,6 +22,9 @@ const envSchema = z.object({
 
   // Admin verification — optional
   ADMIN_EMAIL: z.string().email().optional(),
+
+  // Google OAuth — optional (SSO disabled if not set)
+  GOOGLE_CLIENT_ID: z.string().optional(),
 });
 
 let config;

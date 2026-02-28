@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import GoogleSignIn from '../components/GoogleSignIn';
 
 export default function Login() {
   const { login } = useAuth();
@@ -30,6 +31,21 @@ export default function Login() {
       <h1 className="text-2xl font-bold mb-6 text-center">Log in</h1>
 
       {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</div>}
+
+      <GoogleSignIn
+        onSuccess={(data) => {
+          // Cookies set by server, update auth context and redirect
+          window.location.href = '/dashboard';
+        }}
+        onError={(msg) => setError(msg)}
+        text="signin_with"
+      />
+
+      <div className="flex items-center gap-3 my-5">
+        <div className="flex-1 h-px bg-gray-200" />
+        <span className="text-xs text-gray-400">or</span>
+        <div className="flex-1 h-px bg-gray-200" />
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -68,10 +84,6 @@ export default function Login() {
       <p className="text-sm text-center mt-2">
         <Link to="/forgot-password" className="text-gray-400 hover:text-gray-600">Forgot your password?</Link>
       </p>
-
-      <div className="mt-6 p-3 bg-gray-50 rounded-lg text-xs text-gray-400">
-        <strong>Demo accounts:</strong> Use any seeded email (e.g. sarah@example.com) with password: password123
-      </div>
     </div>
   );
 }
