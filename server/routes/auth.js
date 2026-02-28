@@ -39,7 +39,7 @@ router.post('/register', validate(registerSchema), async (req, res) => {
     const user = { id: userId, email };
     const accessToken = generateAccessToken(user);
     const refreshTokenValue = generateRefreshToken();
-    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
     runSql(db, 'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
       [uuidv4(), userId, refreshTokenValue, refreshTokenExpiresAt]);
@@ -88,7 +88,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
     // Generate tokens
     const accessToken = generateAccessToken(user);
     const refreshTokenValue = generateRefreshToken();
-    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
     runSql(db, 'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
       [uuidv4(), user.id, refreshTokenValue, refreshTokenExpiresAt]);
@@ -152,7 +152,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), async (req, res)
     if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
     runSql(db, 'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
       [uuidv4(), user.id, token, expiresAt]);

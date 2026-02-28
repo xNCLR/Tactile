@@ -232,7 +232,7 @@ describe('Auth — Password Reset', () => {
     const token = 'abc123resettoken';
     const { v4: uuidv4 } = require('uuid');
     runSql(db, 'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
-      [uuidv4(), userId, token, new Date(Date.now() + 3600000).toISOString()]);
+      [uuidv4(), userId, token, new Date(Date.now() + 3600000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')]);
 
     const res = await request(app)
       .post('/api/auth/reset-password')
@@ -252,7 +252,7 @@ describe('Auth — Password Reset', () => {
     const { userId } = createTestUser(db, { email: 'expired@test.com' });
     const { v4: uuidv4 } = require('uuid');
     runSql(db, 'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
-      [uuidv4(), userId, 'expired_token', new Date(Date.now() - 3600000).toISOString()]);
+      [uuidv4(), userId, 'expired_token', new Date(Date.now() - 3600000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')]);
 
     const res = await request(app)
       .post('/api/auth/reset-password')
