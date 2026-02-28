@@ -1195,3 +1195,131 @@ describe('Stripe Key', () => {
     expect(res.body.publishableKey).toBe('pk_test_fake');
   });
 });
+
+// ═══════════════════════════════════════════════════
+// WEBHOOKS — Chargebacks
+// ═══════════════════════════════════════════════════
+
+describe('Webhooks — Chargeback', () => {
+  let teacher, student, booking;
+
+  beforeEach(() => {
+    teacher = createTestTeacher(db);
+    student = createTestUser(db, { name: 'Chargeback Student' });
+    booking = createTestBooking(db, {
+      studentId: student.userId,
+      teacherId: teacher.profileId,
+      overrides: { paymentId: 'pi_chargeback_test', paymentStatus: 'paid' },
+    });
+  });
+
+  function webhookEvent(type, data) {
+    return request(app)
+      .post('/api/webhooks/stripe')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ type, data }));
+  }
+
+  test('charge.dispute.created marks booking as disputed and notifies teacher', async () => {
+    const res = await webhookEvent('charge.dispute.created', {
+      object: {
+        id: 'dp_test_1',
+        payment_intent: 'pi_chargeback_test',
+        amount: 5000,
+        reason: 'fraudulent',
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.received).toBe(true);
+
+    // Booking should be disputed
+    const updated = queryOne(db, 'SELECT payment_status FROM bookings WHERE id = ?', [booking.id]);
+    expect(updated.payment_status).toBe('disputed');
+
+    // Teacher should have a notification
+    const notif = queryOne(db, "SELECT * FROM notifications WHERE user_id = ? AND type = 'payment_disputed'", [teacher.userId]);
+    expect(notif).toBeTruthy();
+    expect(notif.message).toMatch(/disputed/i);
+  });
+
+  test('charge.dispute.closed (won) restores payment status', async () => {
+    // First mark as disputed
+    runSql(db, "UPDATE bookings SET payment_status = 'disputed' WHERE id = ?", [booking.id]);
+
+    const res = await webhookEvent('charge.dispute.closed', {
+      object: {
+        id: 'dp_test_2',
+        payment_intent: 'pi_chargeback_test',
+        status: 'won',
+      },
+    });
+
+    expect(res.status).toBe(200);
+
+    const updated = queryOne(db, 'SELECT status, payment_status FROM bookings WHERE id = ?', [booking.id]);
+    expect(updated.payment_status).toBe('paid');
+    expect(updated.status).toBe('confirmed'); // unchanged
+
+    const notif = queryOne(db, "SELECT * FROM notifications WHERE user_id = ? AND type = 'dispute_resolved'", [teacher.userId]);
+    expect(notif.title).toMatch(/Kept/i);
+  });
+
+  test('charge.dispute.closed (lost) cancels booking and marks chargedback', async () => {
+    runSql(db, "UPDATE bookings SET payment_status = 'disputed' WHERE id = ?", [booking.id]);
+
+    const res = await webhookEvent('charge.dispute.closed', {
+      object: {
+        id: 'dp_test_3',
+        payment_intent: 'pi_chargeback_test',
+        status: 'lost',
+      },
+    });
+
+    expect(res.status).toBe(200);
+
+    const updated = queryOne(db, 'SELECT status, payment_status FROM bookings WHERE id = ?', [booking.id]);
+    expect(updated.payment_status).toBe('chargedback');
+    expect(updated.status).toBe('cancelled');
+
+    const notif = queryOne(db, "SELECT * FROM notifications WHERE user_id = ? AND type = 'dispute_resolved'", [teacher.userId]);
+    expect(notif.title).toMatch(/Reversed/i);
+  });
+
+  test('handles unknown payment_intent gracefully', async () => {
+    const res = await webhookEvent('charge.dispute.created', {
+      object: {
+        id: 'dp_test_ghost',
+        payment_intent: 'pi_nonexistent',
+        amount: 9999,
+        reason: 'product_not_received',
+      },
+    });
+
+    // Should still return 200 (acknowledge receipt, don't retry)
+    expect(res.status).toBe(200);
+  });
+
+  test('payment_intent.succeeded updates booking', async () => {
+    runSql(db, "UPDATE bookings SET payment_status = 'pending' WHERE id = ?", [booking.id]);
+
+    const res = await webhookEvent('payment_intent.succeeded', {
+      object: { id: 'pi_chargeback_test' },
+    });
+
+    expect(res.status).toBe(200);
+    const updated = queryOne(db, 'SELECT payment_status FROM bookings WHERE id = ?', [booking.id]);
+    expect(updated.payment_status).toBe('paid');
+  });
+
+  test('payment_intent.payment_failed cancels booking', async () => {
+    const res = await webhookEvent('payment_intent.payment_failed', {
+      object: { id: 'pi_chargeback_test' },
+    });
+
+    expect(res.status).toBe(200);
+    const updated = queryOne(db, 'SELECT status, payment_status FROM bookings WHERE id = ?', [booking.id]);
+    expect(updated.status).toBe('cancelled');
+    expect(updated.payment_status).toBe('failed');
+  });
+});
