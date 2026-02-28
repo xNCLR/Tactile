@@ -60,6 +60,8 @@ const updateTeacherProfileSchema = z.object({
   searchRadiusKm: z.number().int().min(1).max(100).optional(),
   categories: z.array(z.string().max(50)).max(5).optional(),
   cancellationHours: z.number().int().min(1).max(168).optional(),
+  firstLessonDiscount: z.number().int().min(0).max(50).optional(),
+  bulkDiscount: z.number().int().min(0).max(30).optional(),
 });
 
 const addTimeSlotSchema = z.object({

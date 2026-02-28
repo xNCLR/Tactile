@@ -125,4 +125,12 @@ export const api = {
   // Verification
   submitVerification: (data) => request('/verification/submit', { method: 'POST', body: JSON.stringify(data) }),
   getVerificationStatus: () => request('/verification/status'),
+
+  // Blocks
+  blockStudent: (studentId, reason) => request('/blocks', { method: 'POST', body: JSON.stringify({ studentId, reason }) }),
+  unblockStudent: (studentId) => request(`/blocks/${studentId}`, { method: 'DELETE' }),
+  getBlockedStudents: () => request('/blocks'),
+
+  // Review editing
+  editReview: (id, data) => request(`/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 };

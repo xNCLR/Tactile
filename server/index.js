@@ -20,6 +20,7 @@ const notificationRoutes = require('./routes/notifications');
 const earningsRoutes = require('./routes/earnings');
 const verificationRoutes = require('./routes/verification');
 const webhookRoutes = require('./routes/webhooks');
+const blockRoutes = require('./routes/blocks');
 
 const app = express();
 
@@ -93,6 +94,7 @@ app.use('/api/badges', badgeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/earnings', earningsRoutes);
 app.use('/api/verification', verificationRoutes);
+app.use('/api/blocks', blockRoutes);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

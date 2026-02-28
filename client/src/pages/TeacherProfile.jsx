@@ -177,6 +177,16 @@ export default function TeacherProfile() {
             {teacher.lesson_count >= 5 && (
               <span className="bg-gray-50 text-gray-600 text-sm px-3 py-1 rounded-full">{teacher.lesson_count} lessons taught</span>
             )}
+            {teacher.first_lesson_discount > 0 && (
+              <span className="bg-green-50 text-green-600 text-sm px-3 py-1 rounded-full">
+                {teacher.first_lesson_discount}% off first lesson
+              </span>
+            )}
+            {teacher.bulk_discount > 0 && (
+              <span className="bg-orange-50 text-orange-600 text-sm px-3 py-1 rounded-full">
+                {teacher.bulk_discount}% off weekly packages
+              </span>
+            )}
           </div>
 
           <div className="flex gap-3">

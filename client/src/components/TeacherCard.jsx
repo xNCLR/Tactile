@@ -79,6 +79,9 @@ export default function TeacherCard({ teacher }) {
           {teacher.lesson_count >= 5 && (
             <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-full">{teacher.lesson_count} lessons</span>
           )}
+          {teacher.first_lesson_discount > 0 && (
+            <span className="bg-green-50 text-green-600 px-2 py-0.5 rounded-full">{teacher.first_lesson_discount}% off 1st lesson</span>
+          )}
         </div>
       </div>
     </Link>

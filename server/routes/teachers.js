@@ -35,7 +35,7 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends,
-      tp.search_radius_km, tp.verification_status,
+      tp.search_radius_km, tp.verification_status, tp.first_lesson_discount, tp.bulk_discount,
       (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.teacher_id = tp.id) as avg_rating,
       (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
@@ -91,7 +91,7 @@ router.get('/:id', async (req, res) => {
     const teacher = queryOne(db, `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km,
-      tp.cancellation_hours, tp.verification_status,
+      tp.cancellation_hours, tp.verification_status, tp.first_lesson_discount, tp.bulk_discount,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
       (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
@@ -115,7 +115,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/teachers/profile — create or update teacher profile
 router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async (req, res) => {
   try {
-    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm, categories, cancellationHours } = req.validated;
+    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm, categories, cancellationHours, firstLessonDiscount, bulkDiscount } = req.validated;
     const db = await getDb();
 
     let profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
@@ -127,14 +127,16 @@ router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async
           equipment_requirements = COALESCE(?, equipment_requirements), available_weekdays = COALESCE(?, available_weekdays),
           available_weekends = COALESCE(?, available_weekends), search_radius_km = COALESCE(?, search_radius_km),
           cancellation_hours = COALESCE(?, cancellation_hours),
+          first_lesson_discount = COALESCE(?, first_lesson_discount),
+          bulk_discount = COALESCE(?, bulk_discount),
           updated_at = datetime('now') WHERE user_id = ?`,
-          [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, searchRadiusKm || null, cancellationHours || null, req.user.id]);
+          [bio, hourlyRate, equipmentRequirements, availableWeekdays ? 1 : 0, availableWeekends ? 1 : 0, searchRadiusKm || null, cancellationHours || null, firstLessonDiscount || null, bulkDiscount || null, req.user.id]);
       } else {
         // Create new teacher profile
         const { v4: uuidv4 } = require('uuid');
         const profileId = uuidv4();
-        runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1, searchRadiusKm || 10, cancellationHours || null]);
+        runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours, first_lesson_discount, bulk_discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1, searchRadiusKm || 10, cancellationHours || null, firstLessonDiscount || 0, bulkDiscount || 0]);
       }
 
       // Handle categories if provided

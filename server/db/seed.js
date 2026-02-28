@@ -21,15 +21,15 @@ const USERS_WITH_TEACHING = [
   { name: 'Sarah Chen', email: 'sarah@example.com', postcode: 'W1D 3AF', lat: 51.5134, lng: -0.1312, phone: '07700900010',
     bio: 'Award-winning portrait photographer with 10 years of experience. I specialise in natural light techniques and helping beginners find their creative eye.', rate: 45,
     equipment: 'Camera with manual mode (I can lend a spare if needed)', weekdays: 1, weekends: 1, travelRadius: 15, cancelHours: 24,
-    categories: ['portrait', 'fashion'] },
+    categories: ['portrait', 'fashion'], firstLessonDiscount: 15, bulkDiscount: 10 },
   { name: 'James Morrison', email: 'james@example.com', postcode: 'SE1 9GF', lat: 51.5045, lng: -0.0865, phone: '07700900011',
     bio: 'Street photography enthusiast and Fujifilm ambassador. 5 years teaching along the South Bank. Documentary and candid style.', rate: 55,
     equipment: 'Any camera, even a smartphone works for street photography', weekdays: 1, weekends: 0, travelRadius: 8, cancelHours: 12,
-    categories: ['street', 'film'] },
+    categories: ['street', 'film'], firstLessonDiscount: 20, bulkDiscount: 8 },
   { name: 'Priya Patel', email: 'priya@example.com', postcode: 'E1 6AN', lat: 51.5175, lng: -0.0714, phone: '07700900012',
     bio: 'Fashion and editorial photographer. Private lessons covering composition, lighting setups, and directing models.', rate: 75,
     equipment: 'DSLR or mirrorless camera, external flash recommended', weekdays: 0, weekends: 1, travelRadius: 5, cancelHours: 48,
-    categories: ['fashion', 'portrait'] },
+    categories: ['fashion', 'portrait'], firstLessonDiscount: 25, bulkDiscount: 12 },
   { name: 'Tom Wright', email: 'tom@example.com', postcode: 'NW1 4NR', lat: 51.5353, lng: -0.1440, phone: '07700900013',
     bio: 'Landscape and architecture photographer near Regent\'s Park. Long exposure and golden hour techniques. Lessons are outdoors!', rate: 40,
     equipment: 'Camera with manual mode, tripod strongly recommended', weekdays: 1, weekends: 1, travelRadius: 25, cancelHours: 24,
@@ -37,7 +37,7 @@ const USERS_WITH_TEACHING = [
   { name: 'Amara Okafor', email: 'amara@example.com', postcode: 'SW7 2DD', lat: 51.4965, lng: -0.1764, phone: '07700900014',
     bio: 'Fine art photographer and Royal College of Art graduate. Creative photography — double exposures, intentional camera movement, abstract compositions.', rate: 60,
     equipment: 'Any camera with manual controls', weekdays: 1, weekends: 1, travelRadius: 20, cancelHours: 24,
-    categories: ['portrait', 'macro', 'film'] },
+    categories: ['portrait', 'macro', 'film'], firstLessonDiscount: 10, bulkDiscount: 15 },
   { name: 'David Kim', email: 'david@example.com', postcode: 'EC2A 3AY', lat: 51.5235, lng: -0.0840, phone: '07700900015',
     bio: 'Commercial product photographer with a home studio in Shoreditch. Product and food photography for Instagram, Etsy, or personal projects.', rate: 50,
     equipment: 'Camera, I provide all studio lighting and props', weekdays: 1, weekends: 0, travelRadius: 3, cancelHours: 48,
@@ -94,8 +94,8 @@ async function seed() {
     db.run(`INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [userId, t.email, passwordHash, t.name, 'user', t.phone, t.postcode, t.lat, t.lng]);
 
-    db.run(`INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [profileId, userId, t.bio, t.rate, t.equipment, t.weekdays, t.weekends, t.travelRadius || 10, t.cancelHours || 24]);
+    db.run(`INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours, first_lesson_discount, bulk_discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [profileId, userId, t.bio, t.rate, t.equipment, t.weekdays, t.weekends, t.travelRadius || 10, t.cancelHours || 24, t.firstLessonDiscount || 0, t.bulkDiscount || 0]);
 
     // Link categories
     for (const slug of (t.categories || [])) {

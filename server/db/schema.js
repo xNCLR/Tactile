@@ -88,6 +88,8 @@ async function initDb() {
     verification_status TEXT DEFAULT 'unverified' CHECK(verification_status IN ('unverified', 'pending', 'verified', 'rejected')),
     portfolio_url TEXT,
     verification_notes TEXT,
+    first_lesson_discount INTEGER DEFAULT 0,
+    bulk_discount INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
@@ -140,6 +142,7 @@ async function initDb() {
     teacher_id TEXT NOT NULL REFERENCES teacher_profiles(id),
     rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
     comment TEXT,
+    locked_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
 
@@ -187,6 +190,15 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS blocked_students (
+    id TEXT PRIMARY KEY,
+    teacher_id TEXT NOT NULL REFERENCES teacher_profiles(id) ON DELETE CASCADE,
+    student_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reason TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(teacher_id, student_id)
+  )`);
+
   // ── Indexes ──
 
   db.run('CREATE INDEX IF NOT EXISTS idx_teacher_profiles_user_id ON teacher_profiles(user_id)');
@@ -209,6 +221,9 @@ async function initDb() {
   db.run('CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)');
   db.run('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_id, read)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_blocked_teacher ON blocked_students(teacher_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_blocked_student ON blocked_students(student_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_blocked_unique ON blocked_students(teacher_id, student_id)');
 
   saveDbSync();
   console.log('Database initialized successfully');

@@ -67,6 +67,37 @@ router.post('/', authenticate, validate(createReviewSchema), async (req, res) =>
   }
 });
 
+// PATCH /api/reviews/:id — edit a review (only if not locked)
+router.patch('/:id', authenticate, async (req, res) => {
+  try {
+    const { rating, comment } = req.body;
+    const db = await getDb();
+
+    const review = queryOne(db, 'SELECT * FROM reviews WHERE id = ? AND student_id = ?', [req.params.id, req.user.id]);
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+
+    // Check if review is locked (blocked student)
+    if (review.locked_at) {
+      return res.status(403).json({ error: 'This review has been locked and cannot be edited' });
+    }
+
+    // Only allow editing within 7 days of creation
+    const createdAt = new Date(review.created_at);
+    const daysSince = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince > 7) {
+      return res.status(400).json({ error: 'Reviews can only be edited within 7 days' });
+    }
+
+    runSql(db, 'UPDATE reviews SET rating = COALESCE(?, rating), comment = COALESCE(?, comment) WHERE id = ?',
+      [rating || null, comment !== undefined ? comment : null, req.params.id]);
+
+    res.json({ message: 'Review updated' });
+  } catch (err) {
+    logger.error('Edit review error:', err);
+    res.status(500).json({ error: 'Failed to edit review' });
+  }
+});
+
 // GET /api/reviews/teacher/:teacherId — get all reviews for a teacher
 router.get('/teacher/:teacherId', async (req, res) => {
   try {

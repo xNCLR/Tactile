@@ -83,6 +83,10 @@ export default function EditProfile() {
   const [allCategories, setAllCategories] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
 
+  // Discounts
+  const [firstLessonDiscount, setFirstLessonDiscount] = useState(0);
+  const [bulkDiscount, setBulkDiscount] = useState(0);
+
   useEffect(() => {
     // Fetch categories
     api.getCategories()
@@ -104,6 +108,8 @@ export default function EditProfile() {
       setWeekdays(!!teacherProfile.available_weekdays);
       setWeekends(!!teacherProfile.available_weekends);
       setTravelRadius(teacherProfile.search_radius_km || 10);
+      setFirstLessonDiscount(teacherProfile.first_lesson_discount || 0);
+      setBulkDiscount(teacherProfile.bulk_discount || 0);
       setPortfolioPhotos({
         photo_1: teacherProfile.photo_1 || null,
         photo_2: teacherProfile.photo_2 || null,
@@ -190,6 +196,8 @@ export default function EditProfile() {
           availableWeekdays: weekdays,
           availableWeekends: weekends,
           searchRadiusKm: parseInt(travelRadius),
+          firstLessonDiscount: parseInt(firstLessonDiscount),
+          bulkDiscount: parseInt(bulkDiscount),
           categories: selectedCategories,
         });
       }
@@ -343,6 +351,53 @@ export default function EditProfile() {
                   min="10" max="500" step="5"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                <h2 className="font-semibold mb-4">Pricing & Discounts</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      First Lesson Discount: {firstLessonDiscount > 0 ? `${firstLessonDiscount}% off` : 'None'}
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="50"
+                      step="5"
+                      value={firstLessonDiscount}
+                      onChange={(e) => setFirstLessonDiscount(Number(e.target.value))}
+                      className="w-full accent-brand-600"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>None</span>
+                      <span>25%</span>
+                      <span>50%</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Attract new students with a discounted first lesson.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Package Discount (4+ weeks): {bulkDiscount > 0 ? `${bulkDiscount}% off` : 'None'}
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="30"
+                      step="5"
+                      value={bulkDiscount}
+                      onChange={(e) => setBulkDiscount(Number(e.target.value))}
+                      className="w-full accent-brand-600"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>None</span>
+                      <span>15%</span>
+                      <span>30%</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Reward recurring students who book weekly packages.</p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Equipment Requirements</label>
                 <input type="text" value={equipment} onChange={(e) => setEquipment(e.target.value)}

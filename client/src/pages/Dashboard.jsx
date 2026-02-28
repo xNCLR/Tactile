@@ -258,6 +258,18 @@ export default function Dashboard() {
     } catch (err) { alert(err.message); }
   };
 
+  const handleBlockStudent = async (studentId, studentName) => {
+    const reason = prompt(`Block ${studentName}? They won't be able to book with you again.\n\nOptional reason:`);
+    if (reason === null) return; // cancelled
+    try {
+      await api.blockStudent(studentId, reason || undefined);
+      alert(`${studentName} has been blocked.`);
+      loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-1">
@@ -455,6 +467,14 @@ export default function Dashboard() {
                         {booking.meeting_point ? 'Update meeting point' : 'Set meeting point'}
                       </button>
                     </>
+                  )}
+                  {!isMyStudentBooking && ['completed', 'confirmed'].includes(booking.status) && (
+                    <button
+                      onClick={() => handleBlockStudent(booking.student_id, booking.student_name)}
+                      className="text-sm text-gray-400 hover:text-red-500"
+                    >
+                      Block student
+                    </button>
                   )}
                   {isMyStudentBooking && (booking.status === 'confirmed' || booking.status === 'completed') && !booking.has_review && (
                     <button

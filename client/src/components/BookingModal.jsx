@@ -262,6 +262,18 @@ export default function BookingModal({ teacher, timeSlots, onClose }) {
                   <span className="text-sm text-gray-500">{weeks} × £{perLesson}/lesson</span>
                 </div>
               )}
+              {!recurring && teacher.first_lesson_discount > 0 && (
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-green-600">{teacher.first_lesson_discount}% first lesson discount</span>
+                  <span className="text-sm text-green-600">-£{(perLesson * teacher.first_lesson_discount / 100).toFixed(2)}</span>
+                </div>
+              )}
+              {recurring && weeks >= 4 && teacher.bulk_discount > 0 && (
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-green-600">{teacher.bulk_discount}% package discount</span>
+                  <span className="text-sm text-green-600">-£{(totalPrice * teacher.bulk_discount / 100).toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm text-gray-600">Total</span>
                 <span className="text-lg font-semibold">£{totalPrice}</span>

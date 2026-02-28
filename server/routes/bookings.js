@@ -23,14 +23,34 @@ router.post('/create-intent', authenticate, validate(createIntentSchema), async 
     const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email, u.postcode FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [teacherId]);
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
 
+    // Check if student is blocked by this teacher
+    const blocked = queryOne(db, 'SELECT id FROM blocked_students WHERE teacher_id = ? AND student_id = ?',
+      [teacherId, req.user.id]);
+    if (blocked) return res.status(403).json({ error: 'You cannot book with this teacher' });
+
     const conflict = queryOne(db, `SELECT id FROM bookings WHERE teacher_id = ? AND booking_date = ? AND status != 'cancelled' AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?))`,
       [teacherId, bookingDate, startTime, startTime, endTime, endTime]);
     if (conflict) return res.status(409).json({ error: 'This time slot is already booked' });
 
     const totalPrice = teacher.hourly_rate * durationHours;
 
+    // Apply first-lesson discount if applicable
+    let discount = 0;
+    let discountLabel = null;
+    if (teacher.first_lesson_discount > 0) {
+      const previousBooking = queryOne(db,
+        `SELECT id FROM bookings WHERE student_id = ? AND teacher_id = ? AND status IN ('completed', 'confirmed', 'awaiting_teacher') LIMIT 1`,
+        [req.user.id, teacherId]);
+      if (!previousBooking) {
+        discount = teacher.first_lesson_discount;
+        discountLabel = `${discount}% first lesson discount`;
+      }
+    }
+
+    const discountedPrice = discount > 0 ? totalPrice * (1 - discount / 100) : totalPrice;
+
     // Create Stripe Payment Intent
-    const payment = await createPaymentIntent(Math.round(totalPrice * 100), 'gbp', {
+    const payment = await createPaymentIntent(Math.round(discountedPrice * 100), 'gbp', {
       teacherId,
       studentId: req.user.id,
       bookingDate,
@@ -39,12 +59,14 @@ router.post('/create-intent', authenticate, validate(createIntentSchema), async 
     // Create pending booking
     const bookingId = uuidv4();
     runSql(db, `INSERT INTO bookings (id, student_id, teacher_id, booking_date, start_time, end_time, duration_hours, total_price, status, payment_status, payment_id, notes, meeting_point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
-      [bookingId, req.user.id, teacherId, bookingDate, startTime, endTime, durationHours, totalPrice, payment.id, notes || null, meetingPoint || null]);
+      [bookingId, req.user.id, teacherId, bookingDate, startTime, endTime, durationHours, discountedPrice, payment.id, notes || null, meetingPoint || null]);
 
     res.status(201).json({
       bookingId,
       clientSecret: payment.client_secret,
-      totalPrice,
+      totalPrice: discountedPrice,
+      discount,
+      discountLabel,
       teacherName: teacher.teacher_name,
     });
   } catch (err) {
@@ -62,8 +84,24 @@ router.post('/create-recurring-intent', authenticate, validate(createRecurringIn
     const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [teacherId]);
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
 
+    // Check if student is blocked by this teacher
+    const blocked = queryOne(db, 'SELECT id FROM blocked_students WHERE teacher_id = ? AND student_id = ?',
+      [teacherId, req.user.id]);
+    if (blocked) return res.status(403).json({ error: 'You cannot book with this teacher' });
+
     const totalPerLesson = teacher.hourly_rate * durationHours;
     const totalPrice = totalPerLesson * weeks;
+
+    // Apply bulk discount for 4+ week packages
+    let discount = 0;
+    let discountLabel = null;
+    if (weeks >= 4 && teacher.bulk_discount > 0) {
+      discount = teacher.bulk_discount;
+      discountLabel = `${discount}% package discount (${weeks} weeks)`;
+    }
+
+    const discountedPerLesson = discount > 0 ? totalPerLesson * (1 - discount / 100) : totalPerLesson;
+    const discountedTotal = discountedPerLesson * weeks;
 
     // Generate dates for the next N weeks on the given day
     const dates = [];
@@ -83,7 +121,7 @@ router.post('/create-recurring-intent', authenticate, validate(createRecurringIn
     }
 
     // Create Stripe payment intent for the total
-    const payment = await createPaymentIntent(Math.round(totalPrice * 100), 'gbp', {
+    const payment = await createPaymentIntent(Math.round(discountedTotal * 100), 'gbp', {
       teacherId, studentId: req.user.id, recurring: true, weeks,
     });
 
@@ -95,15 +133,17 @@ router.post('/create-recurring-intent', authenticate, validate(createRecurringIn
       const bookingId = uuidv4();
       bookingIds.push(bookingId);
       runSql(db, `INSERT INTO bookings (id, student_id, teacher_id, booking_date, start_time, end_time, duration_hours, total_price, status, payment_status, payment_id, notes, meeting_point, recurring_group_id, is_recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?, ?, 1)`,
-        [bookingId, req.user.id, teacherId, date, startTime, endTime, durationHours, totalPerLesson, payment.id, notes || null, meetingPoint || null, recurringGroupId]);
+        [bookingId, req.user.id, teacherId, date, startTime, endTime, durationHours, discountedPerLesson, payment.id, notes || null, meetingPoint || null, recurringGroupId]);
     }
 
     res.status(201).json({
       recurringGroupId,
       bookingIds,
       clientSecret: payment.client_secret,
-      totalPrice,
-      perLesson: totalPerLesson,
+      totalPrice: discountedTotal,
+      discount,
+      discountLabel,
+      perLesson: discountedPerLesson,
       weeks,
       dates,
       teacherName: teacher.teacher_name,
