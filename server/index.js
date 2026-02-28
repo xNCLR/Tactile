@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const logger = require('./lib/logger');
 const { initDb } = require('./db/schema');
@@ -40,6 +41,7 @@ app.use(cors({
 app.use('/api/webhooks', webhookRoutes);
 
 app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
 
 // Rate limiting (disabled in test mode)
 if (config.NODE_ENV !== 'test') {

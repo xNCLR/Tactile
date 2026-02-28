@@ -3,8 +3,9 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { getDb, queryOne, runSql, saveDb } = require('../db/schema');
 const crypto = require('crypto');
-const { generateToken, authenticate } = require('../middleware/auth');
+const { generateToken, generateAccessToken, generateRefreshToken, authenticate } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../services/email');
+const config = require('../config');
 const logger = require('../lib/logger');
 const { validate, registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../lib/validators');
 
@@ -28,14 +29,39 @@ router.post('/register', validate(registerSchema), async (req, res) => {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
-    const id = uuidv4();
+    const userId = uuidv4();
     const passwordHash = bcrypt.hashSync(password, 10);
 
     runSql(db, `INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, email, passwordHash, name, 'user', phone || null, postcode || null, latitude || null, longitude || null]);
+      [userId, email, passwordHash, name, 'user', phone || null, postcode || null, latitude || null, longitude || null]);
 
-    const token = generateToken({ id, email });
-    res.status(201).json({ token, user: { id, email, name } });
+    // Generate tokens
+    const user = { id: userId, email };
+    const accessToken = generateAccessToken(user);
+    const refreshTokenValue = generateRefreshToken();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    runSql(db, 'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), userId, refreshTokenValue, refreshTokenExpiresAt]);
+
+    // Set cookies
+    const isProduction = config.NODE_ENV === 'production';
+    res.cookie('tactile_access', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+    res.cookie('tactile_refresh', refreshTokenValue, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/api/auth',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
+    res.status(201).json({ user: { id: userId, email, name } });
   } catch (err) {
     logger.error('Registration error:', err);
     res.status(500).json({ error: 'Registration failed' });
@@ -59,9 +85,32 @@ router.post('/login', validate(loginSchema), async (req, res) => {
 
     const teacherProfile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
 
-    const token = generateToken(user);
+    // Generate tokens
+    const accessToken = generateAccessToken(user);
+    const refreshTokenValue = generateRefreshToken();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    runSql(db, 'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), user.id, refreshTokenValue, refreshTokenExpiresAt]);
+
+    // Set cookies
+    const isProduction = config.NODE_ENV === 'production';
+    res.cookie('tactile_access', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+    res.cookie('tactile_refresh', refreshTokenValue, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/api/auth',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
     res.json({
-      token,
       user: { id: user.id, email: user.email, name: user.name, postcode: user.postcode, phone: user.phone, profilePhoto: user.profile_photo, isTeacher: !!teacherProfile },
       teacherProfile,
     });
@@ -138,6 +187,72 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res) =
   } catch (err) {
     logger.error('Reset password error:', err);
     res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// POST /api/auth/refresh
+router.post('/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.cookies?.tactile_refresh;
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    const db = await getDb();
+    const tokenRecord = queryOne(
+      db,
+      "SELECT * FROM refresh_tokens WHERE token = ? AND expires_at > datetime('now')",
+      [refreshToken]
+    );
+
+    if (!tokenRecord) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    const user = queryOne(db, 'SELECT id, email FROM users WHERE id = ?', [tokenRecord.user_id]);
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Generate new access token
+    const newAccessToken = generateAccessToken(user);
+    const isProduction = config.NODE_ENV === 'production';
+
+    res.cookie('tactile_access', newAccessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.json({ message: 'Token refreshed successfully' });
+  } catch (err) {
+    logger.error('Refresh token error:', err);
+    res.status(500).json({ error: 'Failed to refresh token' });
+  }
+});
+
+// POST /api/auth/logout
+router.post('/logout', async (req, res) => {
+  try {
+    const refreshToken = req.cookies?.tactile_refresh;
+
+    // Delete refresh token from database if present
+    if (refreshToken) {
+      const db = await getDb();
+      runSql(db, 'DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
+    }
+
+    // Clear cookies
+    res.clearCookie('tactile_access', { path: '/' });
+    res.clearCookie('tactile_refresh', { path: '/api/auth' });
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    logger.error('Logout error:', err);
+    res.status(500).json({ error: 'Logout failed' });
   }
 });
 

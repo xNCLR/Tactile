@@ -1,18 +1,43 @@
 const API_BASE = '/api';
 
-function getToken() {
-  return localStorage.getItem('tactile_token');
-}
-
 async function request(endpoint, options = {}) {
-  const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
 
-  const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+  let res = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+    credentials: 'include', // Send cookies with every request
+  });
+
+  // If 401, try to refresh token and retry once
+  if (res.status === 401) {
+    try {
+      const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (refreshRes.ok) {
+        // Retry original request with new token
+        res = await fetch(`${API_BASE}${endpoint}`, {
+          ...options,
+          headers,
+          credentials: 'include',
+        });
+      } else {
+        // Refresh failed, user is not authenticated
+        // Redirect to login will be handled by the caller or global handler
+        const data = await res.json();
+        throw new Error(data.error || 'Authentication failed');
+      }
+    } catch (err) {
+      throw new Error('Authentication required');
+    }
+  }
+
   const data = await res.json();
 
   if (!res.ok) {
@@ -27,6 +52,7 @@ export const api = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => request('/auth/me'),
+  logout: () => request('/auth/logout', { method: 'POST' }),
 
   // Teachers
   searchTeachers: (params) => {
@@ -56,11 +82,10 @@ export const api = {
   uploadProfilePhoto: async (file) => {
     const formData = new FormData();
     formData.append('photo', file);
-    const token = getToken();
     const res = await fetch(`${API_BASE}/uploads/profile-photo`, {
       method: 'POST',
-      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       body: formData,
+      credentials: 'include', // Send cookies
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');
@@ -70,11 +95,10 @@ export const api = {
   uploadPortfolioPhoto: async (file) => {
     const formData = new FormData();
     formData.append('photo', file);
-    const token = getToken();
     const res = await fetch(`${API_BASE}/uploads/portfolio`, {
       method: 'POST',
-      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       body: formData,
+      credentials: 'include', // Send cookies
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');

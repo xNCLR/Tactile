@@ -174,6 +174,14 @@ function initDb() {
     UNIQUE(user_id, teacher_profile_id)
   )`);
 
+  db.exec(`CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   // ── Indexes ──
 
   db.exec('CREATE INDEX IF NOT EXISTS idx_teacher_profiles_user_id ON teacher_profiles(user_id)');
@@ -201,6 +209,8 @@ function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_blocked_unique ON blocked_students(teacher_id, student_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_shortlist_user_id ON shortlist(user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_shortlist_teacher_id ON shortlist(teacher_profile_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)');
 
   console.log('Database initialized successfully');
 }

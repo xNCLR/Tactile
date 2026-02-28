@@ -1,6 +1,22 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const config = require('../config');
 
+// Generate short-lived access token (15 minutes)
+function generateAccessToken(user) {
+  return jwt.sign(
+    { id: user.id, email: user.email },
+    config.JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+}
+
+// Generate random refresh token (to be stored in DB)
+function generateRefreshToken() {
+  return crypto.randomBytes(64).toString('hex');
+}
+
+// Legacy: generate long-lived token for backward compatibility (tests, etc)
 function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email },
@@ -10,13 +26,21 @@ function generateToken(user) {
 }
 
 function authenticate(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
+  // Try to get token from cookie first
+  const cookieToken = req.cookies?.tactile_access;
+
+  // Fallback to Authorization header for tests/backward compatibility
+  const headerToken = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.split(' ')[1]
+    : null;
+
+  const token = cookieToken || headerToken;
+
+  if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   try {
-    const token = header.split(' ')[1];
     const decoded = jwt.verify(token, config.JWT_SECRET);
     req.user = decoded;
     next();
@@ -54,4 +78,4 @@ function requireTeacherProfile(req, res, next) {
   }
 }
 
-module.exports = { generateToken, authenticate, optionalAuth, requireTeacherProfile };
+module.exports = { generateToken, generateAccessToken, generateRefreshToken, authenticate, optionalAuth, requireTeacherProfile };
