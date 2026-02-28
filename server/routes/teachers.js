@@ -182,9 +182,21 @@ router.post('/time-slots', authenticate, requireTeacherProfile, validate(addTime
       return res.status(400).json({ error: 'dayOfWeek, startTime, and endTime are required' });
     }
 
+    if (startTime >= endTime) {
+      return res.status(400).json({ error: 'Start time must be before end time' });
+    }
+
     const db = await getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    // Check for overlapping time slots on the same day
+    const overlap = queryOne(db,
+      `SELECT id FROM time_slots WHERE teacher_id = ? AND day_of_week = ? AND start_time < ? AND end_time > ?`,
+      [profile.id, dayOfWeek, endTime, startTime]);
+    if (overlap) {
+      return res.status(409).json({ error: 'This time slot overlaps with an existing one' });
+    }
 
     const { v4: uuidv4 } = require('uuid');
     const id = uuidv4();
