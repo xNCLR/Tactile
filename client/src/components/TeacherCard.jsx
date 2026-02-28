@@ -45,7 +45,7 @@ export default function TeacherCard({ teacher }) {
         )}
 
         {(() => {
-          const cats = teacher.categories ? teacher.categories.split(', ') : [];
+          const cats = Array.isArray(teacher.categories) ? teacher.categories : [];
           return cats.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1">
               {cats.map(c => (
