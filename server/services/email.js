@@ -185,4 +185,22 @@ async function sendReviewReceivedEmail({ teacherEmail, teacherName, studentName,
   });
 }
 
-module.exports = { sendBookingConfirmation, sendBookingNotification, sendCancellationEmail, sendPasswordResetEmail, sendBookingAcceptedEmail, sendBookingDeclinedEmail, sendInquiryReceivedEmail, sendReviewReceivedEmail };
+async function sendAvailabilityConfirmationEmail({ teacherEmail, teacherName, slotCount }) {
+  return send({
+    to: teacherEmail,
+    subject: 'Confirm your availability for the week',
+    html: `
+      <h2>Hey ${teacherName},</h2>
+      <p>You have <strong>${slotCount} time slot${slotCount !== 1 ? 's' : ''}</strong> open this week.</p>
+      <p>Take a moment to check they're still accurate — it helps students book with confidence.</p>
+      <p style="margin: 24px 0;">
+        <a href="${dashboardLink('/dashboard')}" style="background: #2d5a27; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600;">
+          Confirm Availability
+        </a>
+      </p>
+      <p style="color: #999; font-size: 13px;">If your slots are no longer available, update or remove them from your dashboard.</p>
+    `,
+  });
+}
+
+module.exports = { sendBookingConfirmation, sendBookingNotification, sendCancellationEmail, sendPasswordResetEmail, sendBookingAcceptedEmail, sendBookingDeclinedEmail, sendInquiryReceivedEmail, sendReviewReceivedEmail, sendAvailabilityConfirmationEmail };

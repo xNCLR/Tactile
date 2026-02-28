@@ -164,6 +164,14 @@ export const api = {
   toggleShortlist: (teacherProfileId) => request(`/shortlist/${teacherProfileId}`, { method: 'POST' }),
   getShortlist: () => request('/shortlist'),
 
+  // Teacher credentials
+  getCredentials: (teacherId) => request(`/teachers/${teacherId}/credentials`),
+  addCredential: (text) => request('/teachers/credentials', { method: 'POST', body: JSON.stringify({ text }) }),
+  deleteCredential: (id) => request(`/teachers/credentials/${id}`, { method: 'DELETE' }),
+
+  // Availability confirmation
+  confirmAvailability: () => request('/teachers/confirm-availability', { method: 'POST' }),
+
   // Password reset
   forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token, password) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),

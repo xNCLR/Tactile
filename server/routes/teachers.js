@@ -136,6 +136,7 @@ router.get('/:id', async (req, res) => {
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km,
       tp.cancellation_hours, tp.verification_status, tp.first_lesson_discount, tp.bulk_discount,
+      tp.booking_window_hours,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
       (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
@@ -143,6 +144,20 @@ router.get('/:id', async (req, res) => {
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
 
     const timeSlots = queryAll(db, `SELECT id, day_of_week, start_time, end_time, is_available FROM time_slots WHERE teacher_id = ? AND is_available = 1 ORDER BY day_of_week, start_time`, [req.params.id]);
+
+    const credentials = queryAll(db,
+      'SELECT id, text, sort_order FROM teacher_credentials WHERE teacher_id = ? ORDER BY sort_order, created_at',
+      [req.params.id]);
+
+    // Reliability: % of confirmed bookings not cancelled by teacher
+    const totalConfirmed = queryOne(db,
+      "SELECT COUNT(*) as n FROM bookings WHERE teacher_id = ? AND status IN ('completed', 'confirmed', 'cancelled')",
+      [req.params.id]);
+    const cancelledByTeacher = queryOne(db,
+      "SELECT COUNT(*) as n FROM bookings WHERE teacher_id = ? AND status = 'declined'",
+      [req.params.id]);
+    const total = totalConfirmed.n || 0;
+    const reliability = total > 0 ? Math.round(((total - (cancelledByTeacher.n || 0)) / total) * 100) : null;
 
     // Apply privacy: truncate postcode and add location noise
     const noisy = addLocationNoise(teacher.latitude, teacher.longitude, teacher.profile_id);
@@ -152,6 +167,9 @@ router.get('/:id', async (req, res) => {
       latitude: noisy.lat,
       longitude: noisy.lng,
       categories: teacher.categories ? teacher.categories.split(',') : [],
+      credentials,
+      reliability, // null if no bookings yet, otherwise percentage
+      booking_window_hours: teacher.booking_window_hours ?? 2,
     };
 
     res.json({ teacher: teacherData, timeSlots });
@@ -164,7 +182,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/teachers/profile — create or update teacher profile
 router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async (req, res) => {
   try {
-    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm, categories, cancellationHours, firstLessonDiscount, bulkDiscount } = req.validated;
+    const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm, categories, cancellationHours, firstLessonDiscount, bulkDiscount, bookingWindowHours } = req.validated;
     const db = await getDb();
 
     let profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
@@ -178,8 +196,9 @@ router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async
           cancellation_hours = COALESCE(?, cancellation_hours),
           first_lesson_discount = COALESCE(?, first_lesson_discount),
           bulk_discount = COALESCE(?, bulk_discount),
+          booking_window_hours = COALESCE(?, booking_window_hours),
           updated_at = datetime('now') WHERE user_id = ?`,
-          [bio ?? null, hourlyRate ?? null, equipmentRequirements ?? null, availableWeekdays !== undefined ? (availableWeekdays ? 1 : 0) : null, availableWeekends !== undefined ? (availableWeekends ? 1 : 0) : null, searchRadiusKm ?? null, cancellationHours ?? null, firstLessonDiscount ?? null, bulkDiscount ?? null, req.user.id]);
+          [bio ?? null, hourlyRate ?? null, equipmentRequirements ?? null, availableWeekdays !== undefined ? (availableWeekdays ? 1 : 0) : null, availableWeekends !== undefined ? (availableWeekends ? 1 : 0) : null, searchRadiusKm ?? null, cancellationHours ?? null, firstLessonDiscount ?? null, bulkDiscount ?? null, bookingWindowHours ?? null, req.user.id]);
       } else {
         // Create new teacher profile
         const { v4: uuidv4 } = require('uuid');
@@ -267,6 +286,90 @@ router.delete('/time-slots/:id', authenticate, requireTeacherProfile, async (req
   } catch (err) {
     logger.error('Remove time slot error:', err);
     res.status(500).json({ error: 'Failed to remove time slot' });
+  }
+});
+
+// ── Credentials ──
+
+// GET /api/teachers/:id/credentials
+router.get('/:id/credentials', async (req, res) => {
+  try {
+    const db = await getDb();
+    const credentials = queryAll(db,
+      'SELECT id, text, sort_order FROM teacher_credentials WHERE teacher_id = ? ORDER BY sort_order, created_at',
+      [req.params.id]);
+    res.json({ credentials });
+  } catch (err) {
+    logger.error('Credentials fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch credentials' });
+  }
+});
+
+// POST /api/teachers/credentials
+router.post('/credentials', authenticate, requireTeacherProfile, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Credential text is required' });
+    }
+    if (text.length > 150) {
+      return res.status(400).json({ error: 'Credential must be 150 characters or fewer' });
+    }
+
+    const db = await getDb();
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    // Limit to 10 credentials
+    const count = queryOne(db, 'SELECT COUNT(*) as n FROM teacher_credentials WHERE teacher_id = ?', [profile.id]);
+    if (count.n >= 10) {
+      return res.status(400).json({ error: 'Maximum 10 credentials allowed' });
+    }
+
+    const { v4: uuidv4 } = require('uuid');
+    const id = uuidv4();
+    const sortOrder = count.n; // append to end
+    runSql(db, 'INSERT INTO teacher_credentials (id, teacher_id, text, sort_order) VALUES (?, ?, ?, ?)',
+      [id, profile.id, text.trim(), sortOrder]);
+
+    res.status(201).json({ credential: { id, text: text.trim(), sort_order: sortOrder } });
+  } catch (err) {
+    logger.error('Add credential error:', err);
+    res.status(500).json({ error: 'Failed to add credential' });
+  }
+});
+
+// DELETE /api/teachers/credentials/:id
+router.delete('/credentials/:id', authenticate, requireTeacherProfile, async (req, res) => {
+  try {
+    const db = await getDb();
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    const cred = queryOne(db, 'SELECT id FROM teacher_credentials WHERE id = ? AND teacher_id = ?',
+      [req.params.id, profile.id]);
+    if (!cred) return res.status(404).json({ error: 'Credential not found' });
+
+    runSql(db, 'DELETE FROM teacher_credentials WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Credential removed' });
+  } catch (err) {
+    logger.error('Remove credential error:', err);
+    res.status(500).json({ error: 'Failed to remove credential' });
+  }
+});
+
+// ── Availability confirmation ──
+
+// POST /api/teachers/confirm-availability
+router.post('/confirm-availability', authenticate, requireTeacherProfile, async (req, res) => {
+  try {
+    const db = await getDb();
+    runSql(db, "UPDATE teacher_profiles SET availability_confirmed_at = datetime('now'), updated_at = datetime('now') WHERE user_id = ?",
+      [req.user.id]);
+    res.json({ message: 'Availability confirmed' });
+  } catch (err) {
+    logger.error('Confirm availability error:', err);
+    res.status(500).json({ error: 'Failed to confirm availability' });
   }
 });
 

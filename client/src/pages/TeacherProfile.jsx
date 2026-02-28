@@ -208,6 +208,11 @@ export default function TeacherProfile() {
             {teacher.lesson_count >= 5 && (
               <span className="bg-gray-50 text-gray-600 text-sm px-3 py-1 rounded-full">{teacher.lesson_count} lessons taught</span>
             )}
+            {teacher.reliability != null && teacher.reliability >= 90 && (
+              <span className="bg-emerald-50 text-emerald-600 text-sm px-3 py-1 rounded-full">
+                {teacher.reliability}% lessons honoured
+              </span>
+            )}
             {teacher.first_lesson_discount > 0 && (
               <span className="bg-green-50 text-green-600 text-sm px-3 py-1 rounded-full">
                 {teacher.first_lesson_discount}% off first lesson
@@ -256,6 +261,23 @@ export default function TeacherProfile() {
           </div>
         </div>
       </div>
+
+      {/* Credentials */}
+      {teacher.credentials && teacher.credentials.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h2 className="font-semibold mb-3">Credentials</h2>
+          <ul className="space-y-2">
+            {teacher.credentials.map((cred) => (
+              <li key={cred.id} className="flex items-start gap-2 text-sm text-gray-700">
+                <svg className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                {cred.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Portfolio Photos */}
       {(teacher.photo_1 || teacher.photo_2 || teacher.photo_3) && (

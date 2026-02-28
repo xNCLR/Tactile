@@ -64,6 +64,7 @@ const updateTeacherProfileSchema = z.object({
   cancellationHours: z.number().int().min(1).max(168).optional(),
   firstLessonDiscount: z.number().int().min(0).max(50).optional(),
   bulkDiscount: z.number().int().min(0).max(30).optional(),
+  bookingWindowHours: z.number().int().min(0).max(48).optional(), // 0 = no cutoff
 });
 
 const addTimeSlotSchema = z.object({

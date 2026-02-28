@@ -241,6 +241,9 @@ export default function Dashboard() {
   const [earnings, setEarnings] = useState(null);
   const [teacherTimeSlots, setTeacherTimeSlots] = useState([]);
   const [shortlist, setShortlist] = useState([]);
+  const [credentials, setCredentials] = useState([]);
+  const [newCred, setNewCred] = useState('');
+  const [addingCred, setAddingCred] = useState(false);
 
   const loadData = () => {
     api.getBookings()
@@ -261,7 +264,10 @@ export default function Dashboard() {
         .then(data => setEarnings(data))
         .catch(console.error);
       api.getTeacher(teacherProfile.id)
-        .then(data => setTeacherTimeSlots(data.timeSlots || []))
+        .then(data => {
+          setTeacherTimeSlots(data.timeSlots || []);
+          setCredentials(data.teacher?.credentials || []);
+        })
         .catch(console.error);
     }
   };
@@ -383,6 +389,99 @@ export default function Dashboard() {
               <span className="font-medium">{teacherProfile.available_weekends ? 'Available' : 'Unavailable'}</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Credentials */}
+      {teacherProfile && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h2 className="font-semibold mb-3">Credentials</h2>
+          <p className="text-xs text-gray-400 mb-3">Qualifications, awards, experience — up to 10 items.</p>
+          {credentials.length > 0 && (
+            <ul className="space-y-2 mb-4">
+              {credentials.map((cred) => (
+                <li key={cred.id} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+                  <span>{cred.text}</span>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.deleteCredential(cred.id);
+                        setCredentials(prev => prev.filter(c => c.id !== cred.id));
+                      } catch (err) { alert(err.message); }
+                    }}
+                    className="text-gray-300 hover:text-red-500 ml-2 flex-shrink-0"
+                    title="Remove"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {credentials.length < 10 && (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newCred}
+                onChange={(e) => setNewCred(e.target.value)}
+                placeholder="e.g. BA Photography, UAL (2018)"
+                maxLength={150}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newCred.trim()) {
+                    e.preventDefault();
+                    setAddingCred(true);
+                    api.addCredential(newCred.trim())
+                      .then((data) => {
+                        setCredentials(prev => [...prev, data.credential]);
+                        setNewCred('');
+                      })
+                      .catch(err => alert(err.message))
+                      .finally(() => setAddingCred(false));
+                  }
+                }}
+              />
+              <button
+                disabled={addingCred || !newCred.trim()}
+                onClick={() => {
+                  setAddingCred(true);
+                  api.addCredential(newCred.trim())
+                    .then((data) => {
+                      setCredentials(prev => [...prev, data.credential]);
+                      setNewCred('');
+                    })
+                    .catch(err => alert(err.message))
+                    .finally(() => setAddingCred(false));
+                }}
+                className="bg-brand-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {addingCred ? '...' : 'Add'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Confirm Availability */}
+      {teacherProfile && teacherTimeSlots.length > 0 && (
+        <div className="bg-brand-50 rounded-xl border border-brand-200 p-4 mb-6 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-brand-800">Availability up to date?</p>
+            <p className="text-xs text-brand-600">{teacherTimeSlots.length} slot{teacherTimeSlots.length !== 1 ? 's' : ''} open</p>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                await api.confirmAvailability();
+                alert('Availability confirmed!');
+              } catch (err) { alert(err.message); }
+            }}
+            className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700"
+          >
+            Confirm
+          </button>
         </div>
       )}
 

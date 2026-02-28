@@ -100,6 +100,24 @@ app.use('/api/verification', verificationRoutes);
 app.use('/api/blocks', blockRoutes);
 app.use('/api/shortlist', shortlistRoutes);
 
+// ── Admin / cron endpoints ──
+
+app.post('/api/admin/nudge-availability', async (req, res) => {
+  // In production, secure this with a cron secret header
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.headers['x-cron-secret'] !== cronSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const { runAvailabilityNudge } = require('./jobs/availability-nudge');
+    const result = await runAvailabilityNudge();
+    res.json(result);
+  } catch (err) {
+    logger.error('Nudge job error:', err);
+    res.status(500).json({ error: 'Nudge job failed' });
+  }
+});
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

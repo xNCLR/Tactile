@@ -213,6 +213,20 @@ function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)');
 
+  // Teacher credentials (qualifications, awards, experience)
+  db.exec(`CREATE TABLE IF NOT EXISTS teacher_credentials (
+    id TEXT PRIMARY KEY,
+    teacher_id TEXT NOT NULL REFERENCES teacher_profiles(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_credentials_teacher ON teacher_credentials(teacher_id)');
+
+  // Booking window + availability confirmation columns (added post-initial schema)
+  try { db.exec('ALTER TABLE teacher_profiles ADD COLUMN booking_window_hours INTEGER DEFAULT 2'); } catch (e) { /* exists */ }
+  try { db.exec('ALTER TABLE teacher_profiles ADD COLUMN availability_confirmed_at TEXT'); } catch (e) { /* exists */ }
+
   // OAuth columns (added post-initial schema)
   try { db.exec('ALTER TABLE users ADD COLUMN oauth_provider TEXT'); } catch (e) { /* column exists */ }
   try { db.exec('ALTER TABLE users ADD COLUMN oauth_id TEXT'); } catch (e) { /* column exists */ }
