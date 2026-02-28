@@ -134,9 +134,9 @@ export const api = {
   // Review editing
   editReview: (id, data) => request(`/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-  // Favourites
-  toggleFavourite: (teacherProfileId) => request(`/favourites/${teacherProfileId}`, { method: 'POST' }),
-  getFavourites: () => request('/favourites'),
+  // Shortlist
+  toggleShortlist: (teacherProfileId) => request(`/shortlist/${teacherProfileId}`, { method: 'POST' }),
+  getShortlist: () => request('/shortlist'),
 
   // Password reset
   forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),

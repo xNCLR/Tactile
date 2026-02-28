@@ -67,7 +67,7 @@ async function seed() {
   const passwordHash = bcrypt.hashSync('password123', 10);
 
   // Clear existing data
-  db.run('DELETE FROM favourites');
+  db.run('DELETE FROM shortlist');
   db.run('DELETE FROM teacher_categories');
   db.run('DELETE FROM disputes');
   db.run('DELETE FROM messages');
@@ -125,18 +125,18 @@ async function seed() {
       [userId, s.email, passwordHash, s.name, 'user', s.phone, s.postcode, s.lat, s.lng]);
   }
 
-  // Add some favourites for the seed data
+  // Add some shortlist for the seed data
   if (studentUserIds.length > 0 && teacherProfileIds.length > 0) {
     // First student likes first 3 teachers
     for (let i = 0; i < Math.min(3, teacherProfileIds.length); i++) {
-      db.run('INSERT INTO favourites (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
+      db.run('INSERT INTO shortlist (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
         [uuidv4(), studentUserIds[0], teacherProfileIds[i]]);
     }
 
     // Second student likes last 2 teachers
     if (studentUserIds.length > 1 && teacherProfileIds.length > 2) {
       for (let i = teacherProfileIds.length - 2; i < teacherProfileIds.length; i++) {
-        db.run('INSERT INTO favourites (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
+        db.run('INSERT INTO shortlist (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
           [uuidv4(), studentUserIds[1], teacherProfileIds[i]]);
       }
     }
@@ -147,7 +147,7 @@ async function seed() {
   console.log(`  ${CATEGORIES.length} photography categories`);
   console.log(`  ${USERS_WITH_TEACHING.length} users with teaching profiles`);
   console.log(`  ${USERS_WITHOUT_TEACHING.length} users without teaching profiles`);
-  console.log('  Sample favourites added for first two students');
+  console.log('  Sample shortlist added for first two students');
   console.log('  All users can book lessons AND optionally teach');
   console.log('  Login with any email above + password: password123');
 }

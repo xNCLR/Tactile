@@ -240,7 +240,7 @@ export default function Dashboard() {
   const [rebookSuggestions, setRebookSuggestions] = useState([]);
   const [earnings, setEarnings] = useState(null);
   const [teacherTimeSlots, setTeacherTimeSlots] = useState([]);
-  const [favourites, setFavourites] = useState([]);
+  const [shortlist, setShortlist] = useState([]);
 
   const loadData = () => {
     api.getBookings()
@@ -253,8 +253,8 @@ export default function Dashboard() {
     api.getRebookSuggestions()
       .then((data) => setRebookSuggestions(data.suggestions || []))
       .catch(console.error);
-    api.getFavourites()
-      .then((data) => setFavourites(data.favourites || []))
+    api.getShortlist()
+      .then((data) => setShortlist(data.teachers || []))
       .catch(console.error);
     if (teacherProfile) {
       api.getEarnings()
@@ -460,12 +460,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Saved Teachers */}
-      {favourites.length > 0 && (
+      {/* Shortlist */}
+      {shortlist.length > 0 && (
         <div className="mb-6">
-          <h2 className="font-semibold mb-3">Saved Teachers</h2>
+          <h2 className="font-semibold mb-3">Your Shortlist</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {favourites.map((teacher) => {
+            {shortlist.map((teacher) => {
               const initials = teacher.name.split(' ').map((n) => n[0]).join('').toUpperCase();
               return (
                 <Link

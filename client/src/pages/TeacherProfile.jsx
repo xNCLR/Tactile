@@ -81,8 +81,8 @@ export default function TeacherProfile() {
   const [loading, setLoading] = useState(true);
   const [showBooking, setShowBooking] = useState(false);
   const [showInquiry, setShowInquiry] = useState(false);
-  const [isFavourite, setIsFavourite] = useState(false);
-  const [togglingFavourite, setTogglingFavourite] = useState(false);
+  const [isShortlisted, setIsShortlisted] = useState(false);
+  const [togglingShortlist, setTogglingShortlist] = useState(false);
 
   usePageMeta({
     title: teacher ? teacher.name + ' — Photography Teacher' : 'Teacher',
@@ -105,30 +105,30 @@ export default function TeacherProfile() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Check if teacher is favourited
+  // Check if teacher is shortlisted
   useEffect(() => {
     if (!user) return;
-    api.getFavourites()
+    api.getShortlist()
       .then((data) => {
-        const isFav = data.favourites.some((fav) => fav.profile_id === parseInt(id));
-        setIsFavourite(isFav);
+        const match = data.teachers.some((t) => t.profile_id === parseInt(id));
+        setIsShortlisted(match);
       })
       .catch(console.error);
   }, [id, user]);
 
-  const handleToggleFavourite = async () => {
+  const handleToggleShortlist = async () => {
     if (!user) {
-      alert('Please log in to save teachers');
+      alert('Please log in to shortlist teachers');
       return;
     }
-    setTogglingFavourite(true);
+    setTogglingShortlist(true);
     try {
-      await api.toggleFavourite(id);
-      setIsFavourite((prev) => !prev);
+      await api.toggleShortlist(id);
+      setIsShortlisted((prev) => !prev);
     } catch (err) {
       alert(err.message);
     } finally {
-      setTogglingFavourite(false);
+      setTogglingShortlist(false);
     }
   };
 
@@ -234,13 +234,13 @@ export default function TeacherProfile() {
               Ask a Question
             </button>
             <button
-              onClick={handleToggleFavourite}
-              disabled={togglingFavourite}
+              onClick={handleToggleShortlist}
+              disabled={togglingShortlist}
               className="px-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center justify-center"
-              title={isFavourite ? 'Remove from saved' : 'Save teacher'}
+              title={isShortlisted ? 'Remove from shortlist' : 'Shortlist'}
             >
               <svg
-                className={`w-6 h-6 ${isFavourite ? 'text-red-500 fill-red-500' : 'text-gray-400'}`}
+                className={`w-6 h-6 ${isShortlisted ? 'text-brand-500 fill-brand-500' : 'text-gray-400'}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
