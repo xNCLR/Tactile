@@ -133,4 +133,15 @@ export const api = {
 
   // Review editing
   editReview: (id, data) => request(`/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Favourites
+  toggleFavourite: (teacherProfileId) => request(`/favourites/${teacherProfileId}`, { method: 'POST' }),
+  getFavourites: () => request('/favourites'),
+
+  // Password reset
+  forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token, password) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+
+  // Notification marking as read
+  markNotificationRead: (notificationId) => request(`/notifications/${notificationId}/read`, { method: 'PATCH' }),
 };

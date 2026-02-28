@@ -19,6 +19,9 @@ const envSchema = z.object({
   // Email — optional (falls back to console logging)
   SENDGRID_API_KEY: z.string().optional(),
   SENDGRID_FROM_EMAIL: z.string().email().optional(),
+
+  // Admin verification — optional
+  ADMIN_EMAIL: z.string().email().optional(),
 });
 
 let config;

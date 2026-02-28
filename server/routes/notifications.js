@@ -34,6 +34,22 @@ router.patch('/read-all', authenticate, async (req, res) => {
   }
 });
 
+// PATCH /api/notifications/:id/read — mark single notification as read
+router.patch('/:id/read', authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const notification = queryOne(db,
+      'SELECT id FROM notifications WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]);
+    if (!notification) return res.status(404).json({ error: 'Notification not found' });
+    runSql(db, 'UPDATE notifications SET read = 1 WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Notification marked as read' });
+  } catch (err) {
+    logger.error('Mark single read error:', err);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
 // GET /api/notifications/unread-count — quick poll endpoint
 router.get('/unread-count', authenticate, async (req, res) => {
   try {

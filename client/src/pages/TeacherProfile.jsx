@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
 import BookingModal from '../components/BookingModal';
 import CalendarView from '../components/CalendarView';
@@ -72,6 +73,7 @@ function InquiryModal({ teacherProfileId, teacherName, onClose }) {
 
 export default function TeacherProfile() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [teacher, setTeacher] = useState(null);
   const [timeSlots, setTimeSlots] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -79,6 +81,8 @@ export default function TeacherProfile() {
   const [loading, setLoading] = useState(true);
   const [showBooking, setShowBooking] = useState(false);
   const [showInquiry, setShowInquiry] = useState(false);
+  const [isFavourite, setIsFavourite] = useState(false);
+  const [togglingFavourite, setTogglingFavourite] = useState(false);
 
   usePageMeta({
     title: teacher ? teacher.name + ' — Photography Teacher' : 'Teacher',
@@ -100,6 +104,33 @@ export default function TeacherProfile() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Check if teacher is favourited
+  useEffect(() => {
+    if (!user) return;
+    api.getFavourites()
+      .then((data) => {
+        const isFav = data.favourites.some((fav) => fav.profile_id === parseInt(id));
+        setIsFavourite(isFav);
+      })
+      .catch(console.error);
+  }, [id, user]);
+
+  const handleToggleFavourite = async () => {
+    if (!user) {
+      alert('Please log in to save teachers');
+      return;
+    }
+    setTogglingFavourite(true);
+    try {
+      await api.toggleFavourite(id);
+      setIsFavourite((prev) => !prev);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setTogglingFavourite(false);
+    }
+  };
 
   if (loading) return <div className="text-center py-16 text-gray-400">Loading...</div>;
   if (!teacher) return <div className="text-center py-16 text-gray-500">Teacher not found</div>;
@@ -201,6 +232,26 @@ export default function TeacherProfile() {
               className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
             >
               Ask a Question
+            </button>
+            <button
+              onClick={handleToggleFavourite}
+              disabled={togglingFavourite}
+              className="px-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center justify-center"
+              title={isFavourite ? 'Remove from saved' : 'Save teacher'}
+            >
+              <svg
+                className={`w-6 h-6 ${isFavourite ? 'text-red-500 fill-red-500' : 'text-gray-400'}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                />
+              </svg>
             </button>
           </div>
         </div>

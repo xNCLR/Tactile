@@ -40,7 +40,8 @@ router.post('/', authenticate, validate(createReviewSchema), async (req, res) =>
     const teacher = queryOne(db, 'SELECT user_id FROM teacher_profiles WHERE id = ?', [booking.teacher_id]);
     if (teacher) {
       const teacherUser = queryOne(db, 'SELECT name, email FROM users WHERE id = ?', [teacher.user_id]);
-      if (teacherUser) {
+      const student = queryOne(db, 'SELECT name FROM users WHERE id = ?', [req.user.id]);
+      if (teacherUser && student) {
         // Send email notification
         await sendReviewReceivedEmail({
           teacherEmail: teacherUser.email,

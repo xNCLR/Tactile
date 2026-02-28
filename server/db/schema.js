@@ -199,6 +199,14 @@ async function initDb() {
     UNIQUE(teacher_id, student_id)
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS favourites (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    teacher_profile_id TEXT NOT NULL REFERENCES teacher_profiles(id) ON DELETE CASCADE,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, teacher_profile_id)
+  )`);
+
   // ── Indexes ──
 
   db.run('CREATE INDEX IF NOT EXISTS idx_teacher_profiles_user_id ON teacher_profiles(user_id)');
@@ -224,6 +232,8 @@ async function initDb() {
   db.run('CREATE INDEX IF NOT EXISTS idx_blocked_teacher ON blocked_students(teacher_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_blocked_student ON blocked_students(student_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_blocked_unique ON blocked_students(teacher_id, student_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_favourites_user_id ON favourites(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_favourites_teacher_id ON favourites(teacher_profile_id)');
 
   saveDbSync();
   console.log('Database initialized successfully');

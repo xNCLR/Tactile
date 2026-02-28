@@ -86,7 +86,7 @@ export default function Layout({ children }) {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-50">
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-50 flex flex-col">
                       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                         <h3 className="font-semibold text-sm">Notifications</h3>
                         {unreadCount > 0 && (
@@ -107,6 +107,9 @@ export default function Layout({ children }) {
                           ))
                         )}
                       </div>
+                      <Link to="/notifications" onClick={() => setShowNotifications(false)} className="px-4 py-3 border-t border-gray-100 text-sm text-center text-brand-600 hover:bg-gray-50 transition-colors">
+                        View all notifications
+                      </Link>
                     </div>
                   )}
                 </div>

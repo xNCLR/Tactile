@@ -67,6 +67,7 @@ async function seed() {
   const passwordHash = bcrypt.hashSync('password123', 10);
 
   // Clear existing data
+  db.run('DELETE FROM favourites');
   db.run('DELETE FROM teacher_categories');
   db.run('DELETE FROM disputes');
   db.run('DELETE FROM messages');
@@ -86,10 +87,12 @@ async function seed() {
     db.run('INSERT INTO categories (id, name, slug) VALUES (?, ?, ?)', [id, cat.name, cat.slug]);
   }
 
-  // Create users with teaching profiles
+  // Create users with teaching profiles and store their profile IDs
+  const teacherProfileIds = [];
   for (const t of USERS_WITH_TEACHING) {
     const userId = uuidv4();
     const profileId = uuidv4();
+    teacherProfileIds.push(profileId);
 
     db.run(`INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [userId, t.email, passwordHash, t.name, 'user', t.phone, t.postcode, t.lat, t.lng]);
@@ -113,10 +116,30 @@ async function seed() {
     }
   }
 
-  // Create users without teaching profiles
+  // Create users without teaching profiles and store their IDs
+  const studentUserIds = [];
   for (const s of USERS_WITHOUT_TEACHING) {
+    const userId = uuidv4();
+    studentUserIds.push(userId);
     db.run(`INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [uuidv4(), s.email, passwordHash, s.name, 'user', s.phone, s.postcode, s.lat, s.lng]);
+      [userId, s.email, passwordHash, s.name, 'user', s.phone, s.postcode, s.lat, s.lng]);
+  }
+
+  // Add some favourites for the seed data
+  if (studentUserIds.length > 0 && teacherProfileIds.length > 0) {
+    // First student likes first 3 teachers
+    for (let i = 0; i < Math.min(3, teacherProfileIds.length); i++) {
+      db.run('INSERT INTO favourites (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
+        [uuidv4(), studentUserIds[0], teacherProfileIds[i]]);
+    }
+
+    // Second student likes last 2 teachers
+    if (studentUserIds.length > 1 && teacherProfileIds.length > 2) {
+      for (let i = teacherProfileIds.length - 2; i < teacherProfileIds.length; i++) {
+        db.run('INSERT INTO favourites (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
+          [uuidv4(), studentUserIds[1], teacherProfileIds[i]]);
+      }
+    }
   }
 
   saveDbSync();
@@ -124,6 +147,7 @@ async function seed() {
   console.log(`  ${CATEGORIES.length} photography categories`);
   console.log(`  ${USERS_WITH_TEACHING.length} users with teaching profiles`);
   console.log(`  ${USERS_WITHOUT_TEACHING.length} users without teaching profiles`);
+  console.log('  Sample favourites added for first two students');
   console.log('  All users can book lessons AND optionally teach');
   console.log('  Login with any email above + password: password123');
 }

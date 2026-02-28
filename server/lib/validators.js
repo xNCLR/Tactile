@@ -49,6 +49,7 @@ const searchTeachersSchema = z.object({
   sort: z.enum(['distance', 'price', 'rating']).default('distance'),
   availability: z.enum(['weekdays', 'weekends', '']).optional(),
   category: z.string().max(50).optional(),
+  q: z.string().max(200).optional(),
 });
 
 const updateTeacherProfileSchema = z.object({

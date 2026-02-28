@@ -29,7 +29,7 @@ router.get('/categories', async (req, res) => {
 // GET /api/teachers/search
 router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (req, res) => {
   try {
-    const { lat, lng, radius = 10, sort = 'distance', availability, category } = req.validatedQuery;
+    const { lat, lng, radius = 10, sort = 'distance', availability, category, q } = req.validatedQuery;
     const db = await getDb();
 
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
@@ -49,7 +49,13 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
       query += ` AND tp.id IN (SELECT tc.teacher_id FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE c.slug = ?)`;
     }
 
-    const params = category ? [category] : [];
+    if (q) {
+      query += ` AND tp.bio LIKE ?`;
+    }
+
+    const params = [];
+    if (category) params.push(category);
+    if (q) params.push(`%${q}%`);
     const teachers = queryAll(db, query, params);
 
     let results = teachers.map((t) => ({

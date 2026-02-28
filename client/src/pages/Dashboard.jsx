@@ -167,17 +167,80 @@ function ReviewModal({ booking, onClose, onSubmit }) {
   );
 }
 
+function EditReviewModal({ review, onClose, onSubmit }) {
+  const [rating, setRating] = useState(review.rating);
+  const [comment, setComment] = useState(review.comment || '');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      await api.editReview(review.id, { rating, comment: comment.trim() || undefined });
+      onSubmit();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold mb-1">Edit Your Review</h2>
+        <p className="text-sm text-gray-500 mb-4">Update your rating and comments.</p>
+
+        {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+          <div className="flex gap-1">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button key={star} onClick={() => setRating(star)} className="focus:outline-none">
+                <svg className={`w-8 h-8 ${star <= rating ? 'text-yellow-400' : 'text-gray-200'} hover:text-yellow-300 transition-colors`} fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
+          <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3}
+            placeholder="Tell others about your experience..."
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">
+            Cancel
+          </button>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="flex-1 text-sm bg-brand-600 text-white py-2.5 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50">
+            {submitting ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user, teacherProfile } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reviewBooking, setReviewBooking] = useState(null);
+  const [editingReview, setEditingReview] = useState(null);
   const [disputeBooking, setDisputeBooking] = useState(null);
   const [respondDispute, setRespondDispute] = useState(null);
   const [disputes, setDisputes] = useState({ asStudent: [], asTeacher: [] });
   const [rebookSuggestions, setRebookSuggestions] = useState([]);
   const [earnings, setEarnings] = useState(null);
   const [teacherTimeSlots, setTeacherTimeSlots] = useState([]);
+  const [favourites, setFavourites] = useState([]);
 
   const loadData = () => {
     api.getBookings()
@@ -189,6 +252,9 @@ export default function Dashboard() {
       .catch(console.error);
     api.getRebookSuggestions()
       .then((data) => setRebookSuggestions(data.suggestions || []))
+      .catch(console.error);
+    api.getFavourites()
+      .then((data) => setFavourites(data.favourites || []))
       .catch(console.error);
     if (teacherProfile) {
       api.getEarnings()
@@ -217,6 +283,11 @@ export default function Dashboard() {
   const handleReviewSubmitted = () => {
     setReviewBooking(null);
     setBookings((prev) => prev.map((b) => (b.id === reviewBooking?.id ? { ...b, status: 'completed', has_review: 1 } : b)));
+  };
+
+  const handleEditReviewSubmitted = () => {
+    setEditingReview(null);
+    // Review is already updated, no need to reload bookings
   };
 
   const handleDisputeSubmitted = () => {
@@ -389,6 +460,52 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Saved Teachers */}
+      {favourites.length > 0 && (
+        <div className="mb-6">
+          <h2 className="font-semibold mb-3">Saved Teachers</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {favourites.map((teacher) => {
+              const initials = teacher.name.split(' ').map((n) => n[0]).join('').toUpperCase();
+              return (
+                <Link
+                  key={teacher.profile_id}
+                  to={`/teacher/${teacher.profile_id}`}
+                  className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start gap-3 mb-2">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {teacher.profile_photo ? (
+                        <img src={teacher.profile_photo} alt={teacher.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-bold text-brand-500">{initials}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{teacher.name}</p>
+                      <p className="text-xs text-brand-600 font-medium">£{teacher.hourly_rate}/hr</p>
+                      {teacher.average_rating && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <svg key={star} className={`w-3 h-3 ${star <= Math.round(teacher.average_rating) ? 'text-yellow-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                            ))}
+                          </div>
+                          <span className="text-xs text-gray-500">{teacher.average_rating}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {teacher.postcode && <p className="text-xs text-gray-400">{teacher.postcode}</p>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Bookings */}
       <h2 className="font-semibold mb-4">Your Bookings</h2>
 
@@ -484,6 +601,14 @@ export default function Dashboard() {
                       Leave a review
                     </button>
                   )}
+                  {isMyStudentBooking && booking.has_review && booking.review && (
+                    <button
+                      onClick={() => setEditingReview(booking.review)}
+                      className="text-sm text-brand-600 hover:text-brand-800"
+                    >
+                      Edit review
+                    </button>
+                  )}
                   {isMyStudentBooking && ['confirmed', 'completed'].includes(booking.status) && !bookingHasDispute(booking.id) && (
                     <button
                       onClick={() => setDisputeBooking(booking)}
@@ -499,30 +624,88 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Disputes Section — teacher view */}
-      {disputes.asTeacher.filter((d) => d.status === 'open').length > 0 && (
+      {/* Disputes Section */}
+      {(disputes.asStudent.length > 0 || disputes.asTeacher.length > 0) && (
         <>
-          <h2 className="font-semibold mt-8 mb-4 text-red-600">Open Disputes</h2>
+          <h2 className="font-semibold mt-8 mb-4">Disputes</h2>
           <div className="space-y-3">
-            {disputes.asTeacher.filter((d) => d.status === 'open').map((dispute) => (
-              <div key={dispute.id} className="bg-red-50 rounded-xl border border-red-200 p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <span className="font-medium">{dispute.student_name}</span>
-                    <span className="text-xs text-red-500 ml-2">{dispute.refund_type} refund requested</span>
-                  </div>
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">open</span>
-                </div>
-                <p className="text-sm text-gray-600 mb-2 italic">&ldquo;{dispute.reason}&rdquo;</p>
-                <p className="text-xs text-gray-400 mb-3">{dispute.booking_date} &middot; {dispute.start_time}</p>
-                <button
-                  onClick={() => setRespondDispute(dispute)}
-                  className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-gray-800"
+            {/* Student disputes */}
+            {disputes.asStudent.map((dispute) => {
+              const statusColors = {
+                open: 'bg-red-50 border-red-200 text-red-600',
+                responded: 'bg-yellow-50 border-yellow-200 text-yellow-600',
+                escalated: 'bg-purple-50 border-purple-200 text-purple-600',
+                resolved: 'bg-green-50 border-green-200 text-green-600',
+              };
+              return (
+                <div
+                  key={dispute.id}
+                  className={`rounded-xl border p-4 ${statusColors[dispute.status] || statusColors.open}`}
                 >
-                  Respond
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <span className="font-medium">{dispute.teacher_name}</span>
+                      <span className="text-xs ml-2">{dispute.refund_type} refund requested</span>
+                    </div>
+                    <span className="text-xs bg-white/50 px-2 py-0.5 rounded-full font-medium">
+                      {dispute.status}
+                    </span>
+                  </div>
+                  <p className="text-sm mb-2 italic">&ldquo;{dispute.reason}&rdquo;</p>
+                  {dispute.response && (
+                    <p className="text-sm bg-white/40 p-2 rounded mb-2 italic">
+                      Response: &ldquo;{dispute.response}&rdquo;
+                    </p>
+                  )}
+                  <p className="text-xs opacity-75">
+                    {dispute.booking_date} &middot; {dispute.start_time}
+                  </p>
+                </div>
+              );
+            })}
+
+            {/* Teacher disputes */}
+            {disputes.asTeacher.map((dispute) => {
+              const statusColors = {
+                open: 'bg-red-50 border-red-200 text-red-600',
+                responded: 'bg-yellow-50 border-yellow-200 text-yellow-600',
+                escalated: 'bg-purple-50 border-purple-200 text-purple-600',
+                resolved: 'bg-green-50 border-green-200 text-green-600',
+              };
+              return (
+                <div
+                  key={dispute.id}
+                  className={`rounded-xl border p-4 ${statusColors[dispute.status] || statusColors.open}`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <span className="font-medium">{dispute.student_name}</span>
+                      <span className="text-xs ml-2">{dispute.refund_type} refund requested</span>
+                    </div>
+                    <span className="text-xs bg-white/50 px-2 py-0.5 rounded-full font-medium">
+                      {dispute.status}
+                    </span>
+                  </div>
+                  <p className="text-sm mb-2 italic">&ldquo;{dispute.reason}&rdquo;</p>
+                  {dispute.response && (
+                    <p className="text-sm bg-white/40 p-2 rounded mb-2 italic">
+                      Response: &ldquo;{dispute.response}&rdquo;
+                    </p>
+                  )}
+                  <p className="text-xs opacity-75 mb-3">
+                    {dispute.booking_date} &middot; {dispute.start_time}
+                  </p>
+                  {dispute.status === 'open' && (
+                    <button
+                      onClick={() => setRespondDispute(dispute)}
+                      className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-gray-800"
+                    >
+                      Respond
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
@@ -532,6 +715,13 @@ export default function Dashboard() {
           booking={reviewBooking}
           onClose={() => setReviewBooking(null)}
           onSubmit={handleReviewSubmitted}
+        />
+      )}
+      {editingReview && (
+        <EditReviewModal
+          review={editingReview}
+          onClose={() => setEditingReview(null)}
+          onSubmit={handleEditReviewSubmitted}
         />
       )}
       {disputeBooking && (

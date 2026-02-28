@@ -13,6 +13,7 @@ import BookingConfirmation from './pages/BookingConfirmation';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Messages from './pages/Messages';
+import Notifications from './pages/Notifications';
 import NotFound from './pages/NotFound';
 
 function ProtectedRoute({ children }) {
@@ -55,6 +56,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Messages />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <Notifications />
               </ProtectedRoute>
             }
           />
