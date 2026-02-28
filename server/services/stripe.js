@@ -21,13 +21,18 @@ async function createPaymentIntent(amount, currency = 'gbp', metadata = {}) {
   };
 }
 
-async function refundPayment(paymentId) {
-  const refund = await stripe.refunds.create({
-    payment_intent: paymentId,
-  });
+async function refundPayment(paymentId, amountInPence = null) {
+  const params = { payment_intent: paymentId };
+  if (amountInPence) {
+    params.amount = amountInPence; // Partial refund — specific amount in pence
+  }
+  // If no amount specified, Stripe refunds the full remaining amount
 
-  console.log(`[STRIPE] Refund processed: ${refund.id} for payment ${paymentId}`);
-  return { id: refund.id, status: refund.status };
+  const refund = await stripe.refunds.create(params);
+
+  const label = amountInPence ? `£${(amountInPence / 100).toFixed(2)} partial` : 'full';
+  console.log(`[STRIPE] Refund processed: ${refund.id} (${label}) for payment ${paymentId}`);
+  return { id: refund.id, status: refund.status, amount: refund.amount };
 }
 
 module.exports = { createPaymentIntent, refundPayment };

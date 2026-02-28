@@ -62,9 +62,14 @@ router.patch('/:id/respond', authenticate, validate(respondDisputeSchema), async
     }
 
     if (action === 'accept') {
-      // Process refund
+      // Process refund — respect the dispute's refund_type
       if (booking.payment_id && booking.payment_status === 'paid') {
-        await refundPayment(booking.payment_id);
+        if (dispute.refund_type === 'partial') {
+          const partialAmount = Math.round(booking.total_price * 0.5 * 100); // 50% in pence
+          await refundPayment(booking.payment_id, partialAmount);
+        } else {
+          await refundPayment(booking.payment_id);
+        }
       }
       runSql(db, `UPDATE disputes SET status = 'accepted', teacher_response = ?, resolved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
         [response || 'Accepted', req.params.id]);

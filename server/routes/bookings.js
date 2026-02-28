@@ -18,10 +18,27 @@ router.post('/create-intent', authenticate, validate(createIntentSchema), async 
       return res.status(400).json({ error: 'Missing required booking fields' });
     }
 
+    // Prevent booking in the past
+    const today = new Date().toISOString().split('T')[0];
+    if (bookingDate < today) {
+      return res.status(400).json({ error: 'Cannot book a date in the past' });
+    }
+    if (bookingDate === today) {
+      const now = new Date().toTimeString().slice(0, 5); // HH:MM
+      if (startTime <= now) {
+        return res.status(400).json({ error: 'Cannot book a time that has already passed' });
+      }
+    }
+
     const db = await getDb();
 
     const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email, u.postcode FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [teacherId]);
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
+
+    // Prevent self-booking
+    if (teacher.user_id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot book your own lessons' });
+    }
 
     // Check if student is blocked by this teacher
     const blocked = queryOne(db, 'SELECT id FROM blocked_students WHERE teacher_id = ? AND student_id = ?',
@@ -422,9 +439,7 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
       if (refundAmount === booking.total_price) {
         await refundPayment(booking.payment_id);
       } else {
-        // Partial refund not directly supported by stripe service, but we can still attempt full
-        // In production, you'd need a more sophisticated refund handling
-        await refundPayment(booking.payment_id);
+        await refundPayment(booking.payment_id, Math.round(refundAmount * 100));
       }
     }
 
