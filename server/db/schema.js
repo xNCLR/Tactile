@@ -92,7 +92,7 @@ function initDb() {
     duration_hours REAL NOT NULL,
     total_price REAL NOT NULL,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'awaiting_teacher', 'confirmed', 'declined', 'cancelled', 'completed')),
-    payment_status TEXT DEFAULT 'pending' CHECK(payment_status IN ('pending', 'paid', 'refunded')),
+    payment_status TEXT DEFAULT 'pending' CHECK(payment_status IN ('pending', 'paid', 'refunded', 'failed', 'disputed', 'chargedback')),
     payment_id TEXT,
     notes TEXT,
     meeting_point TEXT,
