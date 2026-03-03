@@ -14,25 +14,25 @@ export default function Home() {
     <div>
       {/* Hero */}
       <section className="bg-white">
-        <div className="max-w-5xl mx-auto px-4 py-20 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-4">
+        <div className="max-w-5xl mx-auto px-4 py-24 text-center">
+          <h1 className="font-serif text-5xl md:text-6xl text-bark leading-tight mb-6">
             Learn photography from<br />
-            <span className="text-brand-600">real people, in person.</span>
+            <span className="italic text-terracotta">real people, in person.</span>
           </h1>
-          <p className="text-lg text-gray-500 max-w-xl mx-auto mb-8">
+          <p className="text-lg text-stone max-w-xl mx-auto mb-10 leading-relaxed">
             Connect with skilled photographers in London for hands-on lessons.
           </p>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-4">
             <Link
               to="/search"
-              className="bg-brand-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-brand-700 transition-colors"
+              className="bg-bark text-white px-7 py-3.5 rounded-full font-medium hover:bg-charcoal transition-colors"
             >
               Find a Teacher
             </Link>
             {!user && (
               <Link
                 to="/register"
-                className="border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                className="border border-sand text-bark px-7 py-3.5 rounded-full font-medium hover:bg-blush transition-colors"
               >
                 Sign Up Free
               </Link>
@@ -42,21 +42,19 @@ export default function Home() {
       </section>
 
       {/* How it works */}
-      <section className="bg-gray-50 border-t border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-16">
-          <h2 className="text-2xl font-bold text-center mb-10">How it works</h2>
-          <div className="grid md:grid-cols-3 gap-8">
+      <section>
+        <div className="max-w-5xl mx-auto px-4 py-20">
+          <h2 className="font-serif text-3xl text-bark text-center mb-12">How it works</h2>
+          <div className="grid md:grid-cols-3 gap-12">
             {[
-              { step: '1', title: 'Browse', desc: 'Find photographers near you.' },
-              { step: '2', title: 'Book', desc: 'Pick a time slot and book.' },
-              { step: '3', title: 'Learn', desc: 'Meet up and learn the craft.' },
+              { step: '01', title: 'Browse', desc: 'Find photographers near you by specialty, location, and availability.' },
+              { step: '02', title: 'Book', desc: 'Pick a time slot, pay securely, and confirm your lesson.' },
+              { step: '03', title: 'Learn', desc: 'Meet up in person and learn the craft hands-on.' },
             ].map((item) => (
               <div key={item.step} className="text-center">
-                <div className="w-10 h-10 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center font-bold mx-auto mb-3">
-                  {item.step}
-                </div>
-                <h3 className="font-semibold mb-1">{item.title}</h3>
-                <p className="text-sm text-gray-500">{item.desc}</p>
+                <span className="font-mono text-xs text-clay tracking-widest">{item.step}</span>
+                <h3 className="font-serif text-2xl text-bark mt-2 mb-2">{item.title}</h3>
+                <p className="text-sm text-stone leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -64,12 +62,12 @@ export default function Home() {
       </section>
 
       {/* CTA */}
-      <section className="bg-white border-t border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-16 text-center">
-          <h2 className="text-2xl font-bold mb-3">Ready to start?</h2>
+      <section>
+        <div className="max-w-5xl mx-auto px-4 py-20 text-center">
+          <h2 className="font-serif text-3xl text-bark mb-6">Ready to start?</h2>
           <Link
             to="/search"
-            className="inline-block bg-brand-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-brand-700 transition-colors"
+            className="inline-block bg-terracotta text-white px-7 py-3.5 rounded-full font-medium hover:bg-brand-700 transition-colors"
           >
             Browse Teachers
           </Link>

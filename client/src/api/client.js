@@ -113,10 +113,11 @@ export const api = {
   createReview: (data) => request('/reviews', { method: 'POST', body: JSON.stringify(data) }),
   getTeacherReviews: (teacherId) => request(`/reviews/teacher/${teacherId}`),
 
-  // Messages
+  // Messages (unified conversations)
   getThreads: () => request('/messages/threads'),
-  getMessages: (bookingId) => request(`/messages/${bookingId}`),
-  sendMessage: (bookingId, content) => request(`/messages/${bookingId}`, { method: 'POST', body: JSON.stringify({ content }) }),
+  getOrCreateConversation: (teacherProfileId) => request('/messages/conversations/get-or-create', { method: 'POST', body: JSON.stringify({ teacherProfileId }) }),
+  getConversationMessages: (conversationId) => request(`/messages/conversations/${conversationId}`),
+  sendConversationMessage: (conversationId, content) => request(`/messages/conversations/${conversationId}`, { method: 'POST', body: JSON.stringify({ content }) }),
 
   // Disputes
   createDispute: (data) => request('/disputes', { method: 'POST', body: JSON.stringify(data) }),
@@ -168,6 +169,14 @@ export const api = {
   getCredentials: (teacherId) => request(`/teachers/${teacherId}/credentials`),
   addCredential: (text) => request('/teachers/credentials', { method: 'POST', body: JSON.stringify({ text }) }),
   deleteCredential: (id) => request(`/teachers/credentials/${id}`, { method: 'DELETE' }),
+
+  // Gear recommendations
+  getGear: (teacherId) => request(`/teachers/${teacherId}/gear`),
+  addGear: (data) => request('/teachers/gear', { method: 'POST', body: JSON.stringify(data) }),
+  deleteGear: (id) => request(`/teachers/gear/${id}`, { method: 'DELETE' }),
+
+  // Teacher analytics
+  getTeacherAnalytics: (days = 30) => request(`/teachers/my-analytics?days=${days}`),
 
   // Availability confirmation
   confirmAvailability: () => request('/teachers/confirm-availability', { method: 'POST' }),

@@ -43,6 +43,26 @@ app.use('/api/webhooks', webhookRoutes);
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
+// ── Anonymous session fingerprint (functional cookie — no consent required) ──
+const crypto = require('crypto');
+app.use((req, res, next) => {
+  if (!req.cookies.tactile_sid) {
+    const sid = crypto.randomBytes(16).toString('hex');
+    const isProduction = config.NODE_ENV === 'production';
+    res.cookie('tactile_sid', sid, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 90 * 24 * 60 * 60 * 1000, // 90 days
+    });
+    req.sessionId = sid;
+  } else {
+    req.sessionId = req.cookies.tactile_sid;
+  }
+  next();
+});
+
 // Rate limiting (disabled in test mode)
 if (config.NODE_ENV !== 'test') {
   const apiLimiter = rateLimit({
@@ -118,14 +138,22 @@ app.post('/api/admin/nudge-availability', async (req, res) => {
   }
 });
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve uploaded files with security headers
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+app.use('/uploads', (req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'none'; script-src 'none'",
+    'Cache-Control': 'public, max-age=86400',
+  });
+  next();
+}, express.static(uploadDir));
 
 // Social sharing metadata endpoint
 app.get('/api/meta/teacher/:id', async (req, res) => {
   try {
     const { getDb, queryOne } = require('./db/schema');
-    const db = await getDb();
+    const db = getDb();
     const teacher = queryOne(db, `SELECT u.name, u.postcode, tp.bio, tp.hourly_rate, tp.verification_status
       FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [req.params.id]);
 
@@ -164,7 +192,40 @@ app.use((err, req, res, _next) => {
 // ── Start ──
 
 async function start() {
+  // Ensure data directories exist (Railway volume mount)
+  const fs = require('fs');
+  const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+  const dbDir = process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : null;
+  if (dbDir && !fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+  // Security: warn if running in non-production mode
+  if (config.NODE_ENV === 'test') {
+    logger.warn('⚠️  Running in TEST mode — rate limiting is DISABLED. Do not expose this instance publicly.');
+  } else if (config.NODE_ENV !== 'production') {
+    logger.warn('Running in development mode — error details will be exposed in responses.');
+  }
+
   await initDb();
+
+  // Schedule Monday 9am availability nudge email (UK time)
+  try {
+    const cron = require('node-cron');
+    cron.schedule('0 9 * * 1', async () => {
+      logger.info('Running weekly availability nudge (Monday 9am)...');
+      try {
+        const { runAvailabilityNudge } = require('./jobs/availability-nudge');
+        const result = await runAvailabilityNudge();
+        logger.info(`Availability nudge done: ${result.sent}/${result.total} teachers emailed`);
+      } catch (err) {
+        logger.error('Scheduled nudge failed:', err);
+      }
+    }, { timezone: 'Europe/London' });
+    logger.info('Scheduled: availability nudge every Monday at 9am (Europe/London)');
+  } catch (err) {
+    logger.warn('node-cron not available, skipping scheduled jobs. Install with: npm i node-cron');
+  }
+
   app.listen(config.PORT, () => {
     logger.info(`Tactile API running on http://localhost:${config.PORT} [${config.NODE_ENV}]`);
   });
@@ -172,6 +233,7 @@ async function start() {
 
 if (require.main === module) {
   start().catch((err) => {
+    console.error('Failed to start server:', err);
     logger.fatal(err, 'Failed to start server');
     process.exit(1);
   });

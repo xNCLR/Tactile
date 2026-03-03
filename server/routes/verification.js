@@ -76,6 +76,9 @@ router.patch('/admin/:teacherProfileId', authenticate, async (req, res) => {
     runSql(db, `UPDATE teacher_profiles SET verification_status = ?, updated_at = datetime('now') WHERE id = ?`,
       [status, req.params.teacherProfileId]);
 
+    // Audit log for admin actions
+    logger.info({ action: 'admin_verification', adminUserId: req.user.id, teacherProfileId: req.params.teacherProfileId, status }, 'Admin verification action');
+
     // Notify teacher
     const teacher = queryOne(db, 'SELECT user_id FROM teacher_profiles WHERE id = ?', [req.params.teacherProfileId]);
     if (teacher) {

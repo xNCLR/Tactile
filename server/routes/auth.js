@@ -8,6 +8,7 @@ const { sendPasswordResetEmail } = require('../services/email');
 const config = require('../config');
 const logger = require('../lib/logger');
 const { validate, registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../lib/validators');
+const { trackEvent } = require('../lib/analytics');
 
 const { OAuth2Client } = require('google-auth-library');
 
@@ -27,7 +28,7 @@ router.post('/register', validate(registerSchema), async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    const db = await getDb();
+    const db = getDb();
     const existing = queryOne(db, 'SELECT id FROM users WHERE email = ?', [email]);
     if (existing) {
       return res.status(409).json({ error: 'Email already registered' });
@@ -60,11 +61,12 @@ router.post('/register', validate(registerSchema), async (req, res) => {
     res.cookie('tactile_refresh', refreshTokenValue, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/api/auth',
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
+    trackEvent('signup_completed', { userId });
     res.status(201).json({ user: { id: userId, email, name } });
   } catch (err) {
     logger.error('Registration error:', err);
@@ -80,7 +82,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const db = await getDb();
+    const db = getDb();
     const user = queryOne(db, 'SELECT * FROM users WHERE email = ?', [email]);
 
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {
@@ -109,11 +111,12 @@ router.post('/login', validate(loginSchema), async (req, res) => {
     res.cookie('tactile_refresh', refreshTokenValue, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/api/auth',
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
+    trackEvent('login', { userId: user.id });
     res.json({
       user: { id: user.id, email: user.email, name: user.name, postcode: user.postcode, phone: user.phone, profilePhoto: user.profile_photo, isTeacher: !!teacherProfile },
       teacherProfile,
@@ -153,7 +156,7 @@ router.post('/google', async (req, res) => {
       return res.status(400).json({ error: 'Google account must have an email address' });
     }
 
-    const db = await getDb();
+    const db = getDb();
 
     // Check if user already exists (by Google OAuth ID or by email)
     let user = queryOne(db, 'SELECT * FROM users WHERE oauth_provider = ? AND oauth_id = ?', ['google', googleId]);
@@ -205,6 +208,7 @@ router.post('/google', async (req, res) => {
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
+    trackEvent('login', { userId: user.id, metadata: { method: 'google' } });
     res.json({
       user: { id: user.id, email: user.email, name: user.name, postcode: user.postcode, phone: user.phone, profilePhoto: user.profile_photo, isTeacher: !!teacherProfile },
       teacherProfile,
@@ -221,7 +225,7 @@ router.post('/google', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const user = queryOne(db, 'SELECT id, email, name, phone, postcode, latitude, longitude, profile_photo FROM users WHERE id = ?', [req.user.id]);
 
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -244,7 +248,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), async (req, res)
     const { email } = req.validated;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
-    const db = await getDb();
+    const db = getDb();
     const user = queryOne(db, 'SELECT id, name, email FROM users WHERE email = ?', [email]);
 
     if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
@@ -272,14 +276,17 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res) =
     if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' });
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-    const db = await getDb();
+    const db = getDb();
     const resetToken = queryOne(db, "SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now')", [token]);
 
     if (!resetToken) return res.status(400).json({ error: 'Invalid or expired reset link' });
 
     const passwordHash = bcrypt.hashSync(password, 10);
     runSql(db, 'UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?', [passwordHash, resetToken.user_id]);
-    runSql(db, 'UPDATE password_reset_tokens SET used = 1 WHERE id = ?', [resetToken.id]);
+
+    // Invalidate ALL reset tokens and refresh tokens for this user (force re-login everywhere)
+    runSql(db, 'UPDATE password_reset_tokens SET used = 1 WHERE user_id = ?', [resetToken.user_id]);
+    runSql(db, 'DELETE FROM refresh_tokens WHERE user_id = ?', [resetToken.user_id]);
 
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
@@ -297,7 +304,7 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Refresh token required' });
     }
 
-    const db = await getDb();
+    const db = getDb();
     const tokenRecord = queryOne(
       db,
       "SELECT * FROM refresh_tokens WHERE token = ? AND expires_at > datetime('now')",
@@ -313,6 +320,17 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
+    // Rotate refresh token: delete old, issue new
+    runSql(db, 'DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
+
+    const newRefreshTokenValue = generateRefreshToken();
+    const newRefreshExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+    runSql(db, 'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), user.id, newRefreshTokenValue, newRefreshExpiresAt]);
+
+    // Cleanup expired tokens for all users (lightweight, runs on each refresh)
+    runSql(db, "DELETE FROM refresh_tokens WHERE expires_at <= datetime('now')");
+
     // Generate new access token
     const newAccessToken = generateAccessToken(user);
     const isProduction = config.NODE_ENV === 'production';
@@ -323,6 +341,13 @@ router.post('/refresh', async (req, res) => {
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+    res.cookie('tactile_refresh', newRefreshTokenValue, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      path: '/api/auth',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
     res.json({ message: 'Token refreshed successfully' });
@@ -339,7 +364,7 @@ router.post('/logout', async (req, res) => {
 
     // Delete refresh token from database if present
     if (refreshToken) {
-      const db = await getDb();
+      const db = getDb();
       runSql(db, 'DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
     }
 

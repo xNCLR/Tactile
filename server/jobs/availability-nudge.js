@@ -41,8 +41,8 @@ async function runAvailabilityNudge() {
           uuidv4(),
           teacher.user_id,
           'availability_check',
-          'Confirm your availability',
-          `You have ${teacher.slot_count} slot${teacher.slot_count !== 1 ? 's' : ''} open this week. Still good?`,
+          'Weekly slot check',
+          `You have ${teacher.slot_count} slot${teacher.slot_count !== 1 ? 's' : ''} open — still available?`,
           '/dashboard',
         ]
       );

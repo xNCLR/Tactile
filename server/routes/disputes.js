@@ -122,9 +122,17 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Auto-escalation: disputes open for 48h+ get escalated
-// This could be called by a cron job or checked on fetch
+// Protected by CRON_SECRET header — only callable by internal cron jobs
 router.post('/check-escalation', async (req, res) => {
   try {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && req.headers['x-cron-secret'] !== cronSecret) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (!cronSecret) {
+      logger.warn('CRON_SECRET not set — dispute escalation endpoint is unprotected');
+    }
+
     const db = await getDb();
     const staleDisputes = queryAll(db,
       `SELECT id FROM disputes WHERE status = 'open' AND created_at <= datetime('now', '-48 hours')`);

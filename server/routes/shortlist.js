@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb, queryAll, queryOne, runSql } = require('../db/schema');
 const { authenticate } = require('../middleware/auth');
 const logger = require('../lib/logger');
+const { trackEvent } = require('../lib/analytics');
 
 const router = express.Router();
 
@@ -22,11 +23,13 @@ router.post('/:teacherProfileId', authenticate, async (req, res) => {
 
     if (existing) {
       runSql(db, 'DELETE FROM shortlist WHERE id = ?', [existing.id]);
+      trackEvent('shortlist_removed', { userId: req.user.id, targetId: teacherProfileId });
       res.json({ message: 'Removed from shortlist', shortlisted: false });
     } else {
       const id = uuidv4();
       runSql(db, 'INSERT INTO shortlist (id, user_id, teacher_profile_id) VALUES (?, ?, ?)',
         [id, req.user.id, teacherProfileId]);
+      trackEvent('shortlist_added', { userId: req.user.id, targetId: teacherProfileId });
       res.status(201).json({ message: 'Added to shortlist', shortlisted: true });
     }
   } catch (err) {

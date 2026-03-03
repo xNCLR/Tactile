@@ -110,6 +110,23 @@ const createReviewSchema = z.object({
   comment: z.string().max(1000).optional(),
 });
 
+const editReviewSchema = z.object({
+  rating: z.number().int().min(1).max(5).optional(),
+  comment: z.string().max(1000).optional(),
+});
+
+// ── Teacher content schemas ──
+
+const addCredentialSchema = z.object({
+  text: z.string().min(1, 'Credential text is required').max(150).trim(),
+});
+
+const addGearSchema = z.object({
+  name: z.string().min(1, 'Item name is required').max(120).trim(),
+  description: z.string().max(300).optional(),
+  url: z.string().max(500).optional(),
+});
+
 // ── Booking action schemas ──
 
 const bookingAcceptSchema = z.object({
@@ -176,6 +193,9 @@ module.exports = {
   bookingAcceptSchema,
   bookingDeclineSchema,
   createReviewSchema,
+  editReviewSchema,
+  addCredentialSchema,
+  addGearSchema,
   sendMessageSchema,
   inquiryMessageSchema,
   createDisputeSchema,

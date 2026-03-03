@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
 import CalendarView from '../components/CalendarView';
+import { getInitials } from '../utils/helpers';
 
 function DisputeModal({ booking, onClose, onSubmit }) {
   const [reason, setReason] = useState('');
@@ -25,34 +26,34 @@ function DisputeModal({ booking, onClose, onSubmit }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-sm w-full p-6">
-        <h2 className="text-lg font-bold mb-1">Report a Problem</h2>
-        <p className="text-sm text-gray-500 mb-4">Describe the issue with your booking.</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold text-bark mb-1">Report a Problem</h2>
+        <p className="text-sm text-stone mb-4">Describe the issue with your booking.</p>
         {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">What happened?</label>
+          <label className="block text-sm font-medium text-bark font-mono mb-1">What happened?</label>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
             placeholder="Describe the issue..."
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+            className="w-full border border-sand rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-terracotta resize-none" />
         </div>
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Refund requested</label>
+          <label className="block text-sm font-medium text-bark font-mono mb-2">Refund requested</label>
           <div className="flex gap-3">
             <label className="flex items-center gap-2 text-sm">
               <input type="radio" name="refundType" value="full" checked={refundType === 'full'} onChange={() => setRefundType('full')}
-                className="text-brand-600 focus:ring-brand-500" />
+                className="text-terracotta focus:ring-terracotta" />
               Full refund
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input type="radio" name="refundType" value="partial" checked={refundType === 'partial'} onChange={() => setRefundType('partial')}
-                className="text-brand-600 focus:ring-brand-500" />
+                className="text-terracotta focus:ring-terracotta" />
               Partial refund
             </label>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="flex-1 text-sm text-stone py-2.5 rounded-lg border border-sand hover:bg-blush">Cancel</button>
           <button onClick={handleSubmit} disabled={submitting}
             className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50">
             {submitting ? 'Submitting...' : 'Submit'}
@@ -82,22 +83,22 @@ function DisputeResponseModal({ dispute, onClose, onSubmit }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-sm w-full p-6">
-        <h2 className="text-lg font-bold mb-1">Respond to Dispute</h2>
-        <p className="text-sm text-gray-500 mb-2">Student requested a {dispute.refund_type} refund:</p>
-        <p className="text-sm bg-gray-50 p-3 rounded-lg mb-4 italic">&ldquo;{dispute.reason}&rdquo;</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold text-bark mb-1">Respond to Dispute</h2>
+        <p className="text-sm text-stone mb-2">Student requested a {dispute.refund_type} refund:</p>
+        <p className="text-sm bg-blush p-3 rounded-lg mb-4 italic">&ldquo;{dispute.reason}&rdquo;</p>
         {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Your response (optional)</label>
+          <label className="block text-sm font-medium text-bark font-mono mb-1">Your response (optional)</label>
           <textarea value={response} onChange={(e) => setResponse(e.target.value)} rows={2}
             placeholder="Add a note..."
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+            className="w-full border border-sand rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-terracotta resize-none" />
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="flex-1 text-sm text-stone py-2.5 rounded-lg border border-sand hover:bg-blush">Cancel</button>
           <button onClick={() => handleRespond('decline')} disabled={submitting}
-            className="flex-1 text-sm bg-gray-900 text-white py-2.5 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50">Decline</button>
+            className="flex-1 text-sm bg-bark text-white py-2.5 rounded-lg font-medium hover:bg-charcoal disabled:opacity-50">Decline</button>
           <button onClick={() => handleRespond('accept')} disabled={submitting}
             className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50">Accept Refund</button>
         </div>
@@ -126,19 +127,19 @@ function ReviewModal({ booking, onClose, onSubmit }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-sm w-full p-6">
-        <h2 className="text-lg font-bold mb-1">Leave a Review</h2>
-        <p className="text-sm text-gray-500 mb-4">How was your lesson with {booking.teacher_name}?</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold text-bark mb-1">Leave a Review</h2>
+        <p className="text-sm text-stone mb-4">How was your lesson with {booking.teacher_name}?</p>
 
         {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+          <label className="block text-sm font-medium text-bark font-mono mb-2">Rating</label>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((star) => (
               <button key={star} onClick={() => setRating(star)} className="focus:outline-none">
-                <svg className={`w-8 h-8 ${star <= rating ? 'text-yellow-400' : 'text-gray-200'} hover:text-yellow-300 transition-colors`} fill="currentColor" viewBox="0 0 20 20">
+                <svg className={`w-8 h-8 ${star <= rating ? 'text-terracotta' : 'text-sand'} hover:text-terracotta transition-colors`} fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
               </button>
@@ -147,18 +148,18 @@ function ReviewModal({ booking, onClose, onSubmit }) {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
+          <label className="block text-sm font-medium text-bark font-mono mb-1">Comment (optional)</label>
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3}
             placeholder="Tell others about your experience..."
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+            className="w-full border border-sand rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-terracotta resize-none" />
         </div>
 
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">
+          <button onClick={onClose} className="flex-1 text-sm text-stone py-2.5 rounded-lg border border-sand hover:bg-blush">
             Cancel
           </button>
           <button onClick={handleSubmit} disabled={submitting}
-            className="flex-1 text-sm bg-brand-600 text-white py-2.5 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50">
+            className="flex-1 text-sm bg-bark text-white py-2.5 rounded-lg font-medium hover:bg-charcoal disabled:opacity-50">
             {submitting ? 'Submitting...' : 'Submit Review'}
           </button>
         </div>
@@ -187,19 +188,19 @@ function EditReviewModal({ review, onClose, onSubmit }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-sm w-full p-6">
-        <h2 className="text-lg font-bold mb-1">Edit Your Review</h2>
-        <p className="text-sm text-gray-500 mb-4">Update your rating and comments.</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+        <h2 className="text-lg font-bold text-bark mb-1">Edit Your Review</h2>
+        <p className="text-sm text-stone mb-4">Update your rating and comments.</p>
 
         {error && <div className="bg-red-50 text-red-600 text-sm p-2 rounded-lg mb-3">{error}</div>}
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+          <label className="block text-sm font-medium text-bark font-mono mb-2">Rating</label>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((star) => (
               <button key={star} onClick={() => setRating(star)} className="focus:outline-none">
-                <svg className={`w-8 h-8 ${star <= rating ? 'text-yellow-400' : 'text-gray-200'} hover:text-yellow-300 transition-colors`} fill="currentColor" viewBox="0 0 20 20">
+                <svg className={`w-8 h-8 ${star <= rating ? 'text-terracotta' : 'text-sand'} hover:text-terracotta transition-colors`} fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
               </button>
@@ -208,18 +209,18 @@ function EditReviewModal({ review, onClose, onSubmit }) {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
+          <label className="block text-sm font-medium text-bark font-mono mb-1">Comment (optional)</label>
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3}
             placeholder="Tell others about your experience..."
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+            className="w-full border border-sand rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-terracotta resize-none" />
         </div>
 
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 text-sm text-gray-600 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50">
+          <button onClick={onClose} className="flex-1 text-sm text-stone py-2.5 rounded-lg border border-sand hover:bg-blush">
             Cancel
           </button>
           <button onClick={handleSubmit} disabled={submitting}
-            className="flex-1 text-sm bg-brand-600 text-white py-2.5 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50">
+            className="flex-1 text-sm bg-bark text-white py-2.5 rounded-lg font-medium hover:bg-charcoal disabled:opacity-50">
             {submitting ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
@@ -239,11 +240,9 @@ export default function Dashboard() {
   const [disputes, setDisputes] = useState({ asStudent: [], asTeacher: [] });
   const [rebookSuggestions, setRebookSuggestions] = useState([]);
   const [earnings, setEarnings] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const [teacherTimeSlots, setTeacherTimeSlots] = useState([]);
   const [shortlist, setShortlist] = useState([]);
-  const [credentials, setCredentials] = useState([]);
-  const [newCred, setNewCred] = useState('');
-  const [addingCred, setAddingCred] = useState(false);
 
   const loadData = () => {
     api.getBookings()
@@ -263,11 +262,11 @@ export default function Dashboard() {
       api.getEarnings()
         .then(data => setEarnings(data))
         .catch(console.error);
+      api.getTeacherAnalytics()
+        .then(data => setAnalytics(data))
+        .catch(console.error);
       api.getTeacher(teacherProfile.id)
-        .then(data => {
-          setTeacherTimeSlots(data.timeSlots || []);
-          setCredentials(data.teacher?.credentials || []);
-        })
+        .then(data => setTeacherTimeSlots(data.timeSlots || []))
         .catch(console.error);
     }
   };
@@ -312,12 +311,12 @@ export default function Dashboard() {
   };
 
   const statusColor = {
-    confirmed: 'bg-green-50 text-green-700',
-    pending: 'bg-yellow-50 text-yellow-700',
-    awaiting_teacher: 'bg-orange-50 text-orange-600',
+    confirmed: 'bg-blush/60 text-bark',
+    pending: 'bg-blush text-rust',
+    awaiting_teacher: 'bg-blush text-terracotta',
     declined: 'bg-red-50 text-red-600',
     cancelled: 'bg-red-50 text-red-600',
-    completed: 'bg-blue-50 text-blue-700',
+    completed: 'bg-paper text-stone',
   };
 
   const handleAccept = async (bookingId) => {
@@ -350,171 +349,108 @@ export default function Dashboard() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Link to="/profile/edit" className="text-sm text-brand-600 hover:underline">Edit Profile</Link>
+        <h1 className="text-2xl font-medium font-serif tracking-wide text-bark">Dashboard</h1>
+        <Link to="/profile/edit" className="text-sm text-terracotta hover:underline">Edit Profile</Link>
       </div>
-      <p className="text-gray-500 mb-6">Welcome back, {user?.name}.</p>
+      <p className="text-stone mb-6">Welcome back, {user?.name}.</p>
 
       {/* Start Teaching CTA — shown if user has no teacher profile */}
       {!teacherProfile && (
-        <div className="bg-gradient-to-br from-brand-50 to-brand-100 rounded-xl border border-brand-200 p-6 mb-6">
-          <h2 className="font-semibold mb-1">Share your photography skills</h2>
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="bg-gradient-to-br from-blush to-sand rounded-2xl border border-sand p-6 mb-6">
+          <h2 className="font-medium font-serif tracking-wide text-bark mb-1">Share your photography skills</h2>
+          <p className="text-sm text-stone mb-4">
             Got a knack for portraits, street, or landscape photography? Set up a teaching profile and start earning.
           </p>
           <Link
             to="/profile/edit"
-            className="inline-block bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+            className="inline-block bg-terracotta text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-brand-700 transition-colors"
           >
             Start Teaching
           </Link>
         </div>
       )}
 
-      {/* Teacher profile summary */}
-      {teacherProfile && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-          <h2 className="font-semibold mb-2">Your Teaching Profile</h2>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-500">Rate:</span>{' '}
-              <span className="font-medium">£{teacherProfile.hourly_rate}/hr</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Weekdays:</span>{' '}
-              <span className="font-medium">{teacherProfile.available_weekdays ? 'Available' : 'Unavailable'}</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Weekends:</span>{' '}
-              <span className="font-medium">{teacherProfile.available_weekends ? 'Available' : 'Unavailable'}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Credentials */}
-      {teacherProfile && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-          <h2 className="font-semibold mb-3">Credentials</h2>
-          <p className="text-xs text-gray-400 mb-3">Qualifications, awards, experience — up to 10 items.</p>
-          {credentials.length > 0 && (
-            <ul className="space-y-2 mb-4">
-              {credentials.map((cred) => (
-                <li key={cred.id} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
-                  <span>{cred.text}</span>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await api.deleteCredential(cred.id);
-                        setCredentials(prev => prev.filter(c => c.id !== cred.id));
-                      } catch (err) { alert(err.message); }
-                    }}
-                    className="text-gray-300 hover:text-red-500 ml-2 flex-shrink-0"
-                    title="Remove"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {credentials.length < 10 && (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newCred}
-                onChange={(e) => setNewCred(e.target.value)}
-                placeholder="e.g. BA Photography, UAL (2018)"
-                maxLength={150}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newCred.trim()) {
-                    e.preventDefault();
-                    setAddingCred(true);
-                    api.addCredential(newCred.trim())
-                      .then((data) => {
-                        setCredentials(prev => [...prev, data.credential]);
-                        setNewCred('');
-                      })
-                      .catch(err => alert(err.message))
-                      .finally(() => setAddingCred(false));
-                  }
-                }}
-              />
-              <button
-                disabled={addingCred || !newCred.trim()}
-                onClick={() => {
-                  setAddingCred(true);
-                  api.addCredential(newCred.trim())
-                    .then((data) => {
-                      setCredentials(prev => [...prev, data.credential]);
-                      setNewCred('');
-                    })
-                    .catch(err => alert(err.message))
-                    .finally(() => setAddingCred(false));
-                }}
-                className="bg-brand-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-              >
-                {addingCred ? '...' : 'Add'}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Confirm Availability */}
-      {teacherProfile && teacherTimeSlots.length > 0 && (
-        <div className="bg-brand-50 rounded-xl border border-brand-200 p-4 mb-6 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-brand-800">Availability up to date?</p>
-            <p className="text-xs text-brand-600">{teacherTimeSlots.length} slot{teacherTimeSlots.length !== 1 ? 's' : ''} open</p>
-          </div>
-          <button
-            onClick={async () => {
-              try {
-                await api.confirmAvailability();
-                alert('Availability confirmed!');
-              } catch (err) { alert(err.message); }
-            }}
-            className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700"
-          >
-            Confirm
-          </button>
-        </div>
-      )}
-
       {/* Earnings */}
       {teacherProfile && earnings && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-          <h2 className="font-semibold mb-4">Earnings</h2>
+        <div className="bg-white rounded-2xl border border-sand p-6 mb-6">
+          <h2 className="font-medium font-serif tracking-wide text-bark mb-4">Earnings</h2>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold text-brand-600">£{earnings.monthEarnings.toFixed(0)}</p>
-              <p className="text-xs text-gray-400 mt-1">This month</p>
+              <p className="text-2xl font-serif tracking-wide text-terracotta">£{earnings.monthEarnings.toFixed(0)}</p>
+              <p className="text-xs text-clay font-mono mt-1">This month</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">£{earnings.totalEarnings.toFixed(0)}</p>
-              <p className="text-xs text-gray-400 mt-1">All time</p>
+              <p className="text-2xl font-serif tracking-wide text-bark">£{earnings.totalEarnings.toFixed(0)}</p>
+              <p className="text-xs text-clay font-mono mt-1">All time</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-orange-500">£{earnings.pendingEarnings.toFixed(0)}</p>
-              <p className="text-xs text-gray-400 mt-1">Pending</p>
+              <p className="text-2xl font-serif tracking-wide text-terracotta">£{earnings.pendingEarnings.toFixed(0)}</p>
+              <p className="text-xs text-clay font-mono mt-1">Pending</p>
             </div>
           </div>
           {earnings.lessonCount > 0 && (
-            <p className="text-xs text-gray-400 text-center mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-stone font-mono text-center mt-3 pt-3 border-t border-sand/40">
               {earnings.lessonCount} lesson{earnings.lessonCount !== 1 ? 's' : ''} completed
             </p>
           )}
         </div>
       )}
 
-      {/* Your Week calendar */}
-      {teacherProfile && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-          <h2 className="font-semibold mb-4">Your Week</h2>
+      {/* Analytics */}
+      {teacherProfile && analytics && (
+        <div className="bg-white rounded-2xl border border-sand p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-medium font-serif text-bark tracking-wide">Analytics</h2>
+            <span className="text-xs text-clay font-mono">Last {analytics.period || '30 days'}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-center mb-4">
+            <div>
+              <p className="text-2xl font-serif text-terracotta tracking-wide">{analytics.profileViews}</p>
+              <p className="text-xs text-clay font-mono mt-1">Views</p>
+            </div>
+            <div>
+              <p className="text-2xl font-serif text-bark tracking-wide">{analytics.uniqueViewers}</p>
+              <p className="text-xs text-clay font-mono mt-1">Unique viewers</p>
+            </div>
+            <div>
+              <p className="text-2xl font-serif text-terracotta tracking-wide">{analytics.inquiryRate}%</p>
+              <p className="text-xs text-clay font-mono mt-1">Inquiry rate</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-3 text-center pt-3 border-t border-sand/40">
+            <div>
+              <p className="text-lg font-serif text-bark tracking-wide">{analytics.searchImpressions}</p>
+              <p className="text-xs text-clay font-mono mt-0.5">Search hits</p>
+            </div>
+            <div>
+              <p className="text-lg font-serif text-bark tracking-wide">{analytics.currentShortlists}</p>
+              <p className="text-xs text-clay font-mono mt-0.5">Bookmarked</p>
+            </div>
+            <div>
+              <p className="text-lg font-serif text-bark tracking-wide">{analytics.bookingIntents}</p>
+              <p className="text-xs text-clay font-mono mt-0.5">Booking intents</p>
+            </div>
+            <div>
+              {analytics.viewTrend !== null ? (
+                <p className={`text-lg font-serif tracking-wide ${analytics.viewTrend >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {analytics.viewTrend > 0 ? '+' : ''}{analytics.viewTrend}%
+                </p>
+              ) : (
+                <p className="text-lg font-serif text-stone tracking-wide">—</p>
+              )}
+              <p className="text-xs text-clay font-mono mt-0.5">View trend</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Your Week — read-only calendar */}
+      {teacherProfile && teacherTimeSlots.length > 0 && (
+        <div className="bg-white rounded-2xl border border-sand p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-medium font-serif tracking-wide text-bark">Your Week</h2>
+            <Link to="/profile/edit" className="text-sm text-terracotta hover:text-rust">Edit slots</Link>
+          </div>
           <CalendarView
             timeSlots={teacherTimeSlots}
             bookings={bookings.filter(b => b.my_role === 'teacher')}
@@ -526,32 +462,32 @@ export default function Dashboard() {
       {/* Rebook nudge */}
       {rebookSuggestions.length > 0 && (
         <div className="mb-6">
-          <h2 className="font-semibold mb-3">Book again?</h2>
+          <h2 className="font-medium font-serif tracking-wide text-bark mb-3">Book again?</h2>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {rebookSuggestions.map((s) => {
-              const initials = s.name.split(' ').map((n) => n[0]).join('').toUpperCase();
+              const initials = getInitials(s.name);
               return (
                 <Link
                   key={s.profile_id}
                   to={`/teacher/${s.profile_id}`}
-                  className="flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow w-56"
+                  className="flex-shrink-0 bg-white rounded-2xl border border-sand p-4 hover:shadow-md transition-shadow w-56"
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blush to-sand flex items-center justify-center overflow-hidden flex-shrink-0">
                       {s.profile_photo ? (
                         <img src={s.profile_photo} alt={s.name} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-sm font-bold text-brand-500">{initials}</span>
+                        <span className="text-sm font-bold text-rust">{initials}</span>
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{s.name}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="font-medium text-sm truncate text-bark">{s.name}</p>
+                      <p className="text-xs text-clay font-mono">
                         {s.lessons_with} lesson{s.lessons_with !== 1 ? 's' : ''} together
                       </p>
                     </div>
                   </div>
-                  <p className="text-xs text-brand-600 font-medium">£{s.hourly_rate}/hr</p>
+                  <p className="text-xs text-terracotta font-medium font-mono">£{s.hourly_rate}/hr</p>
                 </Link>
               );
             })}
@@ -562,42 +498,42 @@ export default function Dashboard() {
       {/* Shortlist */}
       {shortlist.length > 0 && (
         <div className="mb-6">
-          <h2 className="font-semibold mb-3">Your Shortlist</h2>
+          <h2 className="font-medium font-serif tracking-wide text-bark mb-3">Your Shortlist</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {shortlist.map((teacher) => {
-              const initials = teacher.name.split(' ').map((n) => n[0]).join('').toUpperCase();
+              const initials = getInitials(teacher.name);
               return (
                 <Link
                   key={teacher.profile_id}
                   to={`/teacher/${teacher.profile_id}`}
-                  className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                  className="bg-white rounded-2xl border border-sand p-4 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start gap-3 mb-2">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blush to-sand flex items-center justify-center overflow-hidden flex-shrink-0">
                       {teacher.profile_photo ? (
                         <img src={teacher.profile_photo} alt={teacher.name} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-sm font-bold text-brand-500">{initials}</span>
+                        <span className="text-sm font-bold text-rust">{initials}</span>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">{teacher.name}</p>
-                      <p className="text-xs text-brand-600 font-medium">£{teacher.hourly_rate}/hr</p>
+                      <p className="font-medium text-sm truncate text-bark">{teacher.name}</p>
+                      <p className="text-xs text-terracotta font-medium font-mono">£{teacher.hourly_rate}/hr</p>
                       {teacher.average_rating && (
                         <div className="flex items-center gap-1 mt-1">
                           <div className="flex gap-0.5">
                             {[1, 2, 3, 4, 5].map((star) => (
-                              <svg key={star} className={`w-3 h-3 ${star <= Math.round(teacher.average_rating) ? 'text-yellow-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20">
+                              <svg key={star} className={`w-3 h-3 ${star <= Math.round(teacher.average_rating) ? 'text-terracotta' : 'text-sand'}`} fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                               </svg>
                             ))}
                           </div>
-                          <span className="text-xs text-gray-500">{teacher.average_rating}</span>
+                          <span className="text-xs text-stone font-mono">{teacher.average_rating}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                  {teacher.postcode && <p className="text-xs text-gray-400">{teacher.postcode}</p>}
+                  {teacher.postcode && <p className="text-xs text-clay font-mono">{teacher.postcode}</p>}
                 </Link>
               );
             })}
@@ -606,12 +542,12 @@ export default function Dashboard() {
       )}
 
       {/* Bookings */}
-      <h2 className="font-semibold mb-4">Your Bookings</h2>
+      <h2 className="font-medium font-serif tracking-wide text-bark mb-4">Your Bookings</h2>
 
       {loading ? (
-        <p className="text-gray-400 py-8 text-center">Loading bookings...</p>
+        <p className="text-stone py-8 text-center">Loading bookings...</p>
       ) : bookings.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
+        <div className="bg-white rounded-2xl border border-sand p-8 text-center text-stone">
           No bookings yet. Find a teacher to get started!
         </div>
       ) : (
@@ -619,47 +555,47 @@ export default function Dashboard() {
           {bookings.map((booking) => {
             const isMyStudentBooking = booking.my_role === 'student';
             return (
-              <div key={booking.id} className="bg-white rounded-xl border border-gray-200 p-4">
+              <div key={booking.id} className="bg-white rounded-2xl border border-sand p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <span className="font-medium">
+                    <span className="font-medium text-bark">
                       {isMyStudentBooking ? booking.teacher_name : booking.student_name}
                     </span>
                     {!isMyStudentBooking && booking.student_email && (
-                      <span className="text-sm text-gray-400 ml-2">{booking.student_email}</span>
+                      <span className="text-sm text-clay font-mono ml-2">{booking.student_email}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
                     {!isMyStudentBooking && (
-                      <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">teaching</span>
+                      <span className="text-xs bg-paper text-stone font-mono px-2 py-0.5 rounded-full">teaching</span>
                     )}
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || ''}`}>
                       {booking.status}
                     </span>
                   </div>
                 </div>
-                <div className="text-sm text-gray-500 space-y-1">
+                <div className="text-sm text-stone font-mono space-y-1">
                   <p>{booking.booking_date} &middot; {booking.start_time} – {booking.end_time}</p>
                   <p>
                     {booking.duration_hours}h &middot; £{booking.total_price?.toFixed(2)}
                     {booking.payment_status === 'refunded' && <span className="text-red-500 ml-1">(refunded)</span>}
                   </p>
-                  {booking.notes && <p className="italic text-gray-400">"{booking.notes}"</p>}
+                  {booking.notes && <p className="italic text-stone">"{booking.notes}"</p>}
                   {booking.meeting_point && (
-                    <p className="text-sm text-gray-500">
-                      <span className="text-gray-400">Meeting at:</span> {booking.meeting_point}
+                    <p className="text-sm text-stone">
+                      <span className="text-clay">Meeting at:</span> {booking.meeting_point}
                     </p>
                   )}
                 </div>
                 <div className="mt-3 flex gap-3 flex-wrap">
                   {!isMyStudentBooking && booking.status === 'awaiting_teacher' && (
                     <>
-                      <button onClick={() => handleAccept(booking.id)} className="text-sm bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">Accept</button>
-                      <button onClick={() => handleDecline(booking.id)} className="text-sm bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700">Decline</button>
+                      <button onClick={() => handleAccept(booking.id)} className="text-sm bg-bark text-white px-3 py-1 rounded-full hover:bg-charcoal">Accept</button>
+                      <button onClick={() => handleDecline(booking.id)} className="text-sm bg-red-600 text-white px-3 py-1 rounded-full hover:bg-red-700">Decline</button>
                     </>
                   )}
                   {isMyStudentBooking && booking.status === 'awaiting_teacher' && (
-                    <span className="text-sm text-gray-500">Waiting for teacher to confirm</span>
+                    <span className="text-sm text-stone">Waiting for teacher to confirm</span>
                   )}
                   {booking.status === 'confirmed' && (
                     <>
@@ -678,7 +614,7 @@ export default function Dashboard() {
                               .catch(err => alert(err.message));
                           }
                         }}
-                        className="text-sm text-brand-600 hover:text-brand-800"
+                        className="text-sm text-terracotta hover:text-rust"
                       >
                         {booking.meeting_point ? 'Update meeting point' : 'Set meeting point'}
                       </button>
@@ -687,7 +623,7 @@ export default function Dashboard() {
                   {!isMyStudentBooking && ['completed', 'confirmed'].includes(booking.status) && (
                     <button
                       onClick={() => handleBlockStudent(booking.student_id, booking.student_name)}
-                      className="text-sm text-gray-400 hover:text-red-500"
+                      className="text-sm text-clay hover:text-red-500"
                     >
                       Block student
                     </button>
@@ -695,7 +631,7 @@ export default function Dashboard() {
                   {isMyStudentBooking && (booking.status === 'confirmed' || booking.status === 'completed') && !booking.has_review && (
                     <button
                       onClick={() => setReviewBooking(booking)}
-                      className="text-sm text-brand-600 hover:text-brand-800"
+                      className="text-sm text-terracotta hover:text-rust"
                     >
                       Leave a review
                     </button>
@@ -703,7 +639,7 @@ export default function Dashboard() {
                   {isMyStudentBooking && booking.has_review && booking.review && (
                     <button
                       onClick={() => setEditingReview(booking.review)}
-                      className="text-sm text-brand-600 hover:text-brand-800"
+                      className="text-sm text-terracotta hover:text-rust"
                     >
                       Edit review
                     </button>
@@ -711,7 +647,7 @@ export default function Dashboard() {
                   {isMyStudentBooking && ['confirmed', 'completed'].includes(booking.status) && !bookingHasDispute(booking.id) && (
                     <button
                       onClick={() => setDisputeBooking(booking)}
-                      className="text-sm text-gray-400 hover:text-red-600"
+                      className="text-sm text-clay hover:text-red-600"
                     >
                       Report a problem
                     </button>
@@ -726,25 +662,25 @@ export default function Dashboard() {
       {/* Disputes Section */}
       {(disputes.asStudent.length > 0 || disputes.asTeacher.length > 0) && (
         <>
-          <h2 className="font-semibold mt-8 mb-4">Disputes</h2>
+          <h2 className="font-medium font-serif tracking-wide text-bark mt-8 mb-4">Disputes</h2>
           <div className="space-y-3">
             {/* Student disputes */}
             {disputes.asStudent.map((dispute) => {
               const statusColors = {
                 open: 'bg-red-50 border-red-200 text-red-600',
-                responded: 'bg-yellow-50 border-yellow-200 text-yellow-600',
-                escalated: 'bg-purple-50 border-purple-200 text-purple-600',
-                resolved: 'bg-green-50 border-green-200 text-green-600',
+                responded: 'bg-blush border-sand text-rust',
+                escalated: 'bg-paper border-sand text-stone',
+                resolved: 'bg-blush/60 border-sand text-bark',
               };
               return (
                 <div
                   key={dispute.id}
-                  className={`rounded-xl border p-4 ${statusColors[dispute.status] || statusColors.open}`}
+                  className={`rounded-2xl border p-4 ${statusColors[dispute.status] || statusColors.open}`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <span className="font-medium">{dispute.teacher_name}</span>
-                      <span className="text-xs ml-2">{dispute.refund_type} refund requested</span>
+                      <span className="text-xs ml-2 font-mono">{dispute.refund_type} refund requested</span>
                     </div>
                     <span className="text-xs bg-white/50 px-2 py-0.5 rounded-full font-medium">
                       {dispute.status}
@@ -756,7 +692,7 @@ export default function Dashboard() {
                       Response: &ldquo;{dispute.response}&rdquo;
                     </p>
                   )}
-                  <p className="text-xs opacity-75">
+                  <p className="text-xs opacity-75 font-mono">
                     {dispute.booking_date} &middot; {dispute.start_time}
                   </p>
                 </div>
@@ -767,19 +703,19 @@ export default function Dashboard() {
             {disputes.asTeacher.map((dispute) => {
               const statusColors = {
                 open: 'bg-red-50 border-red-200 text-red-600',
-                responded: 'bg-yellow-50 border-yellow-200 text-yellow-600',
-                escalated: 'bg-purple-50 border-purple-200 text-purple-600',
-                resolved: 'bg-green-50 border-green-200 text-green-600',
+                responded: 'bg-blush border-sand text-rust',
+                escalated: 'bg-paper border-sand text-stone',
+                resolved: 'bg-blush/60 border-sand text-bark',
               };
               return (
                 <div
                   key={dispute.id}
-                  className={`rounded-xl border p-4 ${statusColors[dispute.status] || statusColors.open}`}
+                  className={`rounded-2xl border p-4 ${statusColors[dispute.status] || statusColors.open}`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <span className="font-medium">{dispute.student_name}</span>
-                      <span className="text-xs ml-2">{dispute.refund_type} refund requested</span>
+                      <span className="text-xs ml-2 font-mono">{dispute.refund_type} refund requested</span>
                     </div>
                     <span className="text-xs bg-white/50 px-2 py-0.5 rounded-full font-medium">
                       {dispute.status}
@@ -791,13 +727,13 @@ export default function Dashboard() {
                       Response: &ldquo;{dispute.response}&rdquo;
                     </p>
                   )}
-                  <p className="text-xs opacity-75 mb-3">
+                  <p className="text-xs opacity-75 font-mono mb-3">
                     {dispute.booking_date} &middot; {dispute.start_time}
                   </p>
                   {dispute.status === 'open' && (
                     <button
                       onClick={() => setRespondDispute(dispute)}
-                      className="text-sm bg-gray-900 text-white px-4 py-1.5 rounded-lg hover:bg-gray-800"
+                      className="text-sm bg-bark text-white px-4 py-1.5 rounded-full hover:bg-charcoal"
                     >
                       Respond
                     </button>

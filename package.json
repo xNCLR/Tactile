@@ -6,6 +6,8 @@
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
     "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm install && npm run build",
+    "start": "cd server && node index.js",
     "seed": "cd server && node db/seed.js",
     "test": "jest --forceExit --detectOpenHandles server/tests/"
   },

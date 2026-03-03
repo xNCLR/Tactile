@@ -87,7 +87,7 @@ router.get('/', authenticate, requireTeacherProfile, async (req, res) => {
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
 
     const blocked = queryAll(db,
-      `SELECT bs.id, bs.student_id, bs.reason, bs.created_at, u.name as student_name, u.email as student_email
+      `SELECT bs.id, bs.student_id, bs.reason, bs.created_at, u.name as student_name
        FROM blocked_students bs JOIN users u ON bs.student_id = u.id
        WHERE bs.teacher_id = ?
        ORDER BY bs.created_at DESC`,

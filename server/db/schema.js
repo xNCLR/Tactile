@@ -2,7 +2,11 @@ const Database = require('better-sqlite3');
 const path = require('path');
 
 const RAW_DB_PATH = process.env.DB_PATH || 'tactile.db';
-const DB_PATH = RAW_DB_PATH === ':memory:' ? ':memory:' : path.join(__dirname, '..', RAW_DB_PATH);
+const DB_PATH = RAW_DB_PATH === ':memory:'
+  ? ':memory:'
+  : path.isAbsolute(RAW_DB_PATH)
+    ? RAW_DB_PATH
+    : path.join(__dirname, '..', RAW_DB_PATH);
 
 let dbInstance = null;
 
@@ -213,6 +217,18 @@ function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)');
 
+  // Gear recommendations (affiliate links)
+  db.exec(`CREATE TABLE IF NOT EXISTS gear_recommendations (
+    id TEXT PRIMARY KEY,
+    teacher_id TEXT NOT NULL REFERENCES teacher_profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    url TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_gear_teacher ON gear_recommendations(teacher_id)');
+
   // Teacher credentials (qualifications, awards, experience)
   db.exec(`CREATE TABLE IF NOT EXISTS teacher_credentials (
     id TEXT PRIMARY KEY,
@@ -223,9 +239,94 @@ function initDb() {
   )`);
   db.exec('CREATE INDEX IF NOT EXISTS idx_credentials_teacher ON teacher_credentials(teacher_id)');
 
+  // Conversations (one per student-teacher pair, unifies inquiry + booking messages)
+  db.exec(`CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    teacher_profile_id TEXT NOT NULL REFERENCES teacher_profiles(id) ON DELETE CASCADE,
+    student_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(teacher_profile_id, student_id)
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_teacher ON conversations(teacher_profile_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_student ON conversations(student_id)');
+
+  // Add conversation_id to messages (nullable for migration)
+  try { db.exec('ALTER TABLE messages ADD COLUMN conversation_id TEXT REFERENCES conversations(id)'); } catch (e) { /* exists */ }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)');
+
+  // Backfill: create conversations for existing message pairs and link messages
+  const existingConvos = queryOne(db, 'SELECT COUNT(*) as count FROM conversations');
+  if (existingConvos.count === 0) {
+    const { v4: uuidv4 } = require('uuid');
+
+    // 1. From bookings: unique (teacher_id, student_id) pairs
+    const bookingPairs = queryAll(db,
+      `SELECT DISTINCT b.teacher_id as teacher_profile_id, b.student_id
+       FROM bookings b`);
+    for (const pair of bookingPairs) {
+      const convId = uuidv4();
+      try {
+        runSql(db, 'INSERT INTO conversations (id, teacher_profile_id, student_id) VALUES (?, ?, ?)',
+          [convId, pair.teacher_profile_id, pair.student_id]);
+      } catch (e) { /* unique constraint — skip */ }
+    }
+
+    // 2. From inquiry messages: unique (teacher_profile_id, sender_id) pairs
+    const inquiryPairs = queryAll(db,
+      `SELECT DISTINCT m.teacher_profile_id, m.sender_id as student_id
+       FROM messages m
+       WHERE m.booking_id IS NULL AND m.teacher_profile_id IS NOT NULL`);
+    for (const pair of inquiryPairs) {
+      const convId = uuidv4();
+      try {
+        runSql(db, 'INSERT INTO conversations (id, teacher_profile_id, student_id) VALUES (?, ?, ?)',
+          [convId, pair.teacher_profile_id, pair.student_id]);
+      } catch (e) { /* unique constraint — skip */ }
+    }
+
+    // 3. Link booking messages to conversations
+    runSql(db,
+      `UPDATE messages SET conversation_id = (
+        SELECT c.id FROM conversations c
+        JOIN bookings b ON b.teacher_id = c.teacher_profile_id AND b.student_id = c.student_id
+        WHERE messages.booking_id = b.id
+      ) WHERE messages.booking_id IS NOT NULL AND messages.conversation_id IS NULL`);
+
+    // 4. Link inquiry messages to conversations
+    runSql(db,
+      `UPDATE messages SET conversation_id = (
+        SELECT c.id FROM conversations c
+        WHERE messages.teacher_profile_id = c.teacher_profile_id AND messages.sender_id = c.student_id
+      ) WHERE messages.booking_id IS NULL AND messages.teacher_profile_id IS NOT NULL AND messages.conversation_id IS NULL`);
+
+    console.log('Backfilled conversations from existing messages');
+  }
+
   // Booking window + availability confirmation columns (added post-initial schema)
   try { db.exec('ALTER TABLE teacher_profiles ADD COLUMN booking_window_hours INTEGER DEFAULT 2'); } catch (e) { /* exists */ }
   try { db.exec('ALTER TABLE teacher_profiles ADD COLUMN availability_confirmed_at TEXT'); } catch (e) { /* exists */ }
+
+  // ── Analytics events ──
+  db.exec(`CREATE TABLE IF NOT EXISTS analytics_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    user_id TEXT,
+    session_id TEXT,
+    target_id TEXT,
+    metadata TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_analytics_event_type ON analytics_events(event_type)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_analytics_user_id ON analytics_events(user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_analytics_target_id ON analytics_events(target_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_analytics_created_at ON analytics_events(created_at)');
+
+  // Composite indexes for common query patterns
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conversation_sender ON messages(conversation_id, sender_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_bookings_teacher_status_date ON bookings(teacher_id, status, booking_date)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_disputes_status_created ON disputes(status, created_at)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_analytics_type_target ON analytics_events(event_type, target_id)');
 
   // OAuth columns (added post-initial schema)
   try { db.exec('ALTER TABLE users ADD COLUMN oauth_provider TEXT'); } catch (e) { /* column exists */ }

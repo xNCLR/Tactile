@@ -1,9 +1,12 @@
 const express = require('express');
+const { v4: uuidv4 } = require('uuid');
 const { getDb, queryAll, queryOne, runSql, transaction } = require('../db/schema');
 const { authenticate, optionalAuth, requireTeacherProfile } = require('../middleware/auth');
 const logger = require('../lib/logger');
-const { validate, validateQuery, searchTeachersSchema, updateTeacherProfileSchema, addTimeSlotSchema } = require('../lib/validators');
+const { validate, validateQuery, searchTeachersSchema, updateTeacherProfileSchema, addTimeSlotSchema, addCredentialSchema, addGearSchema } = require('../lib/validators');
 const config = require('../config');
+const { trackEvent } = require('../lib/analytics');
+const { teacherAnalytics } = require('../lib/analytics-queries');
 
 const router = express.Router();
 
@@ -40,7 +43,7 @@ function addLocationNoise(lat, lng, seed) {
 // GET /api/teachers/categories
 router.get('/categories', async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const categories = queryAll(db, 'SELECT id, slug, name FROM categories ORDER BY name');
     res.json({ categories });
   } catch (err) {
@@ -50,23 +53,29 @@ router.get('/categories', async (req, res) => {
 });
 
 // GET /api/teachers/search
+// SECURITY NOTE: This endpoint uses dynamic SQL construction for filters.
+// All user inputs (category, q) are passed as parameterized values (?), never interpolated.
+// The string concatenation only appends static SQL fragments based on validated query params.
 router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (req, res) => {
   try {
     const { lat, lng, radius = 10, sort = 'distance', availability, category, q, bounds } = req.validatedQuery;
-    const db = await getDb();
+    const db = getDb();
 
     let query = `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
-      tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends,
+      tp.photo_1, tp.photo_2, tp.photo_3,
       tp.search_radius_km, tp.verification_status, tp.first_lesson_discount, tp.bulk_discount,
       (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.teacher_id = tp.id) as avg_rating,
       (SELECT COUNT(*) FROM reviews r WHERE r.teacher_id = tp.id) as review_count,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
-      (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
+      (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories,
+      (SELECT COUNT(*) FROM time_slots ts WHERE ts.teacher_id = tp.id AND ts.is_available = 1 AND ts.day_of_week BETWEEN 1 AND 5) as weekday_slots,
+      (SELECT COUNT(*) FROM time_slots ts WHERE ts.teacher_id = tp.id AND ts.is_available = 1 AND ts.day_of_week IN (0, 6)) as weekend_slots
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE 1=1`;
 
-    if (availability === 'weekdays') query += ' AND tp.available_weekdays = 1';
-    else if (availability === 'weekends') query += ' AND tp.available_weekends = 1';
+    // Filter by actual time slots rather than stale flags
+    if (availability === 'weekdays') query += ' AND (SELECT COUNT(*) FROM time_slots ts WHERE ts.teacher_id = tp.id AND ts.is_available = 1 AND ts.day_of_week BETWEEN 1 AND 5) > 0';
+    else if (availability === 'weekends') query += ' AND (SELECT COUNT(*) FROM time_slots ts WHERE ts.teacher_id = tp.id AND ts.is_available = 1 AND ts.day_of_week IN (0, 6)) > 0';
 
     if (category) {
       query += ` AND tp.id IN (SELECT tc.teacher_id FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE c.slug = ?)`;
@@ -89,6 +98,8 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
         latitude: noisy.lat,
         longitude: noisy.lng,
         categories: t.categories ? t.categories.split(',') : [],
+        available_weekdays: t.weekday_slots > 0 ? 1 : 0,
+        available_weekends: t.weekend_slots > 0 ? 1 : 0,
         distance: lat && lng ? haversineDistance(parseFloat(lat), parseFloat(lng), t.latitude, t.longitude) : null,
       };
     });
@@ -121,6 +132,12 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
 
     results = results.map((t) => ({ ...t, distance: t.distance !== null ? Math.round(t.distance * 10) / 10 : null }));
 
+    // Log search impressions
+    const viewerId = req.user?.id || null;
+    for (const t of results) {
+      trackEvent('search_impression', { userId: viewerId, sessionId: req.sessionId, targetId: t.profile_id, metadata: { category, q, sort } });
+    }
+
     res.json({ teachers: results, total: results.length });
   } catch (err) {
     logger.error('Search error:', err);
@@ -128,15 +145,33 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
   }
 });
 
-// GET /api/teachers/:id
-router.get('/:id', async (req, res) => {
+// ── Teacher Analytics (own dashboard) ──
+
+// GET /api/teachers/my-analytics — must be defined before /:id to avoid param capture
+router.get('/my-analytics', authenticate, requireTeacherProfile, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    const days = Math.min(Math.max(parseInt(req.query.days) || 30, 7), 90);
+    const analytics = teacherAnalytics(profile.id, days);
+    res.json(analytics);
+  } catch (err) {
+    logger.error('Teacher analytics error:', err);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// GET /api/teachers/:id
+router.get('/:id', optionalAuth, async (req, res) => {
+  try {
+    const db = getDb();
     const teacher = queryOne(db, `SELECT u.id as user_id, u.name, u.postcode, u.latitude, u.longitude, u.profile_photo,
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km,
       tp.cancellation_hours, tp.verification_status, tp.first_lesson_discount, tp.bulk_discount,
-      tp.booking_window_hours,
+      tp.booking_window_hours, tp.availability_confirmed_at,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
       (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
@@ -147,6 +182,10 @@ router.get('/:id', async (req, res) => {
 
     const credentials = queryAll(db,
       'SELECT id, text, sort_order FROM teacher_credentials WHERE teacher_id = ? ORDER BY sort_order, created_at',
+      [req.params.id]);
+
+    const gear = queryAll(db,
+      'SELECT id, name, description, url, sort_order FROM gear_recommendations WHERE teacher_id = ? ORDER BY sort_order, created_at',
       [req.params.id]);
 
     // Reliability: % of confirmed bookings not cancelled by teacher
@@ -168,9 +207,12 @@ router.get('/:id', async (req, res) => {
       longitude: noisy.lng,
       categories: teacher.categories ? teacher.categories.split(',') : [],
       credentials,
+      gear,
       reliability, // null if no bookings yet, otherwise percentage
       booking_window_hours: teacher.booking_window_hours ?? 2,
     };
+
+    trackEvent('profile_view', { userId: req.user?.id || null, sessionId: req.sessionId, targetId: req.params.id });
 
     res.json({ teacher: teacherData, timeSlots });
   } catch (err) {
@@ -183,7 +225,7 @@ router.get('/:id', async (req, res) => {
 router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async (req, res) => {
   try {
     const { bio, hourlyRate, equipmentRequirements, availableWeekdays, availableWeekends, searchRadiusKm, categories, cancellationHours, firstLessonDiscount, bulkDiscount, bookingWindowHours } = req.validated;
-    const db = await getDb();
+    const db = getDb();
 
     let profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
 
@@ -201,7 +243,6 @@ router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async
           [bio ?? null, hourlyRate ?? null, equipmentRequirements ?? null, availableWeekdays !== undefined ? (availableWeekdays ? 1 : 0) : null, availableWeekends !== undefined ? (availableWeekends ? 1 : 0) : null, searchRadiusKm ?? null, cancellationHours ?? null, firstLessonDiscount ?? null, bulkDiscount ?? null, bookingWindowHours ?? null, req.user.id]);
       } else {
         // Create new teacher profile
-        const { v4: uuidv4 } = require('uuid');
         const profileId = uuidv4();
         runSql(db, `INSERT INTO teacher_profiles (id, user_id, bio, hourly_rate, equipment_requirements, available_weekdays, available_weekends, search_radius_km, cancellation_hours, first_lesson_discount, bulk_discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [profileId, req.user.id, bio || null, hourlyRate || 30, equipmentRequirements || null, availableWeekdays ? 1 : 1, availableWeekends ? 1 : 1, searchRadiusKm || 10, cancellationHours || null, firstLessonDiscount || 0, bulkDiscount || 0]);
@@ -247,7 +288,7 @@ router.post('/time-slots', authenticate, requireTeacherProfile, validate(addTime
       return res.status(400).json({ error: 'Start time must be before end time' });
     }
 
-    const db = await getDb();
+    const db = getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
 
@@ -259,7 +300,6 @@ router.post('/time-slots', authenticate, requireTeacherProfile, validate(addTime
       return res.status(409).json({ error: 'This time slot overlaps with an existing one' });
     }
 
-    const { v4: uuidv4 } = require('uuid');
     const id = uuidv4();
     runSql(db, 'INSERT INTO time_slots (id, teacher_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
       [id, profile.id, dayOfWeek, startTime, endTime]);
@@ -274,7 +314,7 @@ router.post('/time-slots', authenticate, requireTeacherProfile, validate(addTime
 // DELETE /api/teachers/time-slots/:id
 router.delete('/time-slots/:id', authenticate, requireTeacherProfile, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
 
@@ -294,7 +334,7 @@ router.delete('/time-slots/:id', authenticate, requireTeacherProfile, async (req
 // GET /api/teachers/:id/credentials
 router.get('/:id/credentials', async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const credentials = queryAll(db,
       'SELECT id, text, sort_order FROM teacher_credentials WHERE teacher_id = ? ORDER BY sort_order, created_at',
       [req.params.id]);
@@ -306,17 +346,11 @@ router.get('/:id/credentials', async (req, res) => {
 });
 
 // POST /api/teachers/credentials
-router.post('/credentials', authenticate, requireTeacherProfile, async (req, res) => {
+router.post('/credentials', authenticate, requireTeacherProfile, validate(addCredentialSchema), async (req, res) => {
   try {
-    const { text } = req.body;
-    if (!text || text.trim().length === 0) {
-      return res.status(400).json({ error: 'Credential text is required' });
-    }
-    if (text.length > 150) {
-      return res.status(400).json({ error: 'Credential must be 150 characters or fewer' });
-    }
+    const { text } = req.validated;
 
-    const db = await getDb();
+    const db = getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
 
@@ -326,7 +360,6 @@ router.post('/credentials', authenticate, requireTeacherProfile, async (req, res
       return res.status(400).json({ error: 'Maximum 10 credentials allowed' });
     }
 
-    const { v4: uuidv4 } = require('uuid');
     const id = uuidv4();
     const sortOrder = count.n; // append to end
     runSql(db, 'INSERT INTO teacher_credentials (id, teacher_id, text, sort_order) VALUES (?, ?, ?, ?)',
@@ -342,7 +375,7 @@ router.post('/credentials', authenticate, requireTeacherProfile, async (req, res
 // DELETE /api/teachers/credentials/:id
 router.delete('/credentials/:id', authenticate, requireTeacherProfile, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
 
@@ -358,12 +391,74 @@ router.delete('/credentials/:id', authenticate, requireTeacherProfile, async (re
   }
 });
 
+// ── Gear Recommendations ──
+
+// GET /api/teachers/:id/gear
+router.get('/:id/gear', async (req, res) => {
+  try {
+    const db = getDb();
+    const gear = queryAll(db,
+      'SELECT id, name, description, url, sort_order FROM gear_recommendations WHERE teacher_id = ? ORDER BY sort_order, created_at',
+      [req.params.id]);
+    res.json({ gear });
+  } catch (err) {
+    logger.error('Gear fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch gear recommendations' });
+  }
+});
+
+// POST /api/teachers/gear
+router.post('/gear', authenticate, requireTeacherProfile, validate(addGearSchema), async (req, res) => {
+  try {
+    const { name, description, url } = req.validated;
+
+    const db = getDb();
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    // Limit to 15 gear items
+    const count = queryOne(db, 'SELECT COUNT(*) as n FROM gear_recommendations WHERE teacher_id = ?', [profile.id]);
+    if (count.n >= 15) {
+      return res.status(400).json({ error: 'Maximum 15 gear recommendations allowed' });
+    }
+
+    const id = uuidv4();
+    const sortOrder = count.n;
+    runSql(db, 'INSERT INTO gear_recommendations (id, teacher_id, name, description, url, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, profile.id, name.trim(), description?.trim() || null, url?.trim() || null, sortOrder]);
+
+    res.status(201).json({ item: { id, name: name.trim(), description: description?.trim() || null, url: url?.trim() || null, sort_order: sortOrder } });
+  } catch (err) {
+    logger.error('Add gear error:', err);
+    res.status(500).json({ error: 'Failed to add gear recommendation' });
+  }
+});
+
+// DELETE /api/teachers/gear/:id
+router.delete('/gear/:id', authenticate, requireTeacherProfile, async (req, res) => {
+  try {
+    const db = getDb();
+    const profile = queryOne(db, 'SELECT id FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    const item = queryOne(db, 'SELECT id FROM gear_recommendations WHERE id = ? AND teacher_id = ?',
+      [req.params.id, profile.id]);
+    if (!item) return res.status(404).json({ error: 'Gear recommendation not found' });
+
+    runSql(db, 'DELETE FROM gear_recommendations WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Gear recommendation removed' });
+  } catch (err) {
+    logger.error('Remove gear error:', err);
+    res.status(500).json({ error: 'Failed to remove gear recommendation' });
+  }
+});
+
 // ── Availability confirmation ──
 
 // POST /api/teachers/confirm-availability
 router.post('/confirm-availability', authenticate, requireTeacherProfile, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     runSql(db, "UPDATE teacher_profiles SET availability_confirmed_at = datetime('now'), updated_at = datetime('now') WHERE user_id = ?",
       [req.user.id]);
     res.json({ message: 'Availability confirmed' });

@@ -7,3 +7,6 @@ test-tactile.db
 server/uploads/
 server/:memory:
 server/__tests__/
+pitch/
+contacts.txt
+launch-plan.txt

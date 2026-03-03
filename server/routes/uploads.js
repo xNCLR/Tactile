@@ -8,9 +8,13 @@ const logger = require('../lib/logger');
 
 const router = express.Router();
 
-// Configure multer
+// Safe column name map for portfolio slots (prevents SQL injection if whitelist is ever bypassed)
+const PORTFOLIO_SLOTS = { photo_1: 'photo_1', photo_2: 'photo_2', photo_3: 'photo_3' };
+
+// Configure multer — use UPLOAD_DIR env var for persistent volume in production
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 const storage = multer.diskStorage({
-  destination: path.join(__dirname, '..', 'uploads'),
+  destination: UPLOAD_DIR,
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${uuidv4()}${ext}`);
@@ -21,12 +25,13 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
+    if (allowedExts.includes(ext) && allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only .jpg, .jpeg, .png, .webp files are allowed'));
+      cb(new Error('Only image files (.jpg, .jpeg, .png, .webp) are allowed'));
     }
   },
 });
@@ -37,7 +42,7 @@ router.post('/profile-photo', authenticate, upload.single('photo'), async (req, 
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const photoUrl = `/uploads/${req.file.filename}`;
-    const db = await getDb();
+    const db = getDb();
 
     // Delete old file if exists
     const user = queryOne(db, 'SELECT profile_photo FROM users WHERE id = ?', [req.user.id]);
@@ -60,7 +65,7 @@ router.post('/portfolio', authenticate, upload.single('photo'), async (req, res)
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const db = await getDb();
+    const db = getDb();
     const profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) return res.status(403).json({ error: 'Only teachers can upload portfolio photos' });
 
@@ -73,7 +78,7 @@ router.post('/portfolio', authenticate, upload.single('photo'), async (req, res)
     else if (!profile.photo_3) slot = 'photo_3';
     else return res.status(400).json({ error: 'Maximum 3 portfolio photos. Delete one first.' });
 
-    runSql(db, `UPDATE teacher_profiles SET ${slot} = ? WHERE user_id = ?`, [photoUrl, req.user.id]);
+    runSql(db, `UPDATE teacher_profiles SET ${PORTFOLIO_SLOTS[slot]} = ? WHERE user_id = ?`, [photoUrl, req.user.id]);
 
     res.json({ url: photoUrl, slot });
   } catch (err) {
@@ -86,11 +91,11 @@ router.post('/portfolio', authenticate, upload.single('photo'), async (req, res)
 router.delete('/portfolio/:slot', authenticate, async (req, res) => {
   try {
     const { slot } = req.params;
-    if (!['photo_1', 'photo_2', 'photo_3'].includes(slot)) {
+    if (!PORTFOLIO_SLOTS[slot]) {
       return res.status(400).json({ error: 'Invalid slot' });
     }
 
-    const db = await getDb();
+    const db = getDb();
     const profile = queryOne(db, 'SELECT * FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
     if (!profile) return res.status(403).json({ error: 'Not a teacher' });
 
@@ -100,7 +105,7 @@ router.delete('/portfolio/:slot', authenticate, async (req, res) => {
       try { require('fs').unlinkSync(filePath); } catch {}
     }
 
-    runSql(db, `UPDATE teacher_profiles SET ${slot} = NULL WHERE user_id = ?`, [req.user.id]);
+    runSql(db, `UPDATE teacher_profiles SET ${PORTFOLIO_SLOTS[slot]} = NULL WHERE user_id = ?`, [req.user.id]);
 
     res.json({ message: 'Photo removed' });
   } catch (err) {

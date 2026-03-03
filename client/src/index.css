@@ -3,5 +3,14 @@
 @tailwind utilities;
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Work Sans', system-ui, -apple-system, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Instrument Serif', Georgia, serif;
+}
+
+/* Mono for labels, metadata, timestamps */
+.font-mono {
+  font-family: 'DM Mono', ui-monospace, monospace;
 }

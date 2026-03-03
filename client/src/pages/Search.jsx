@@ -38,7 +38,6 @@ export default function Search() {
     }
   }, []);
 
-  // Fetch for list view (radius-based)
   useEffect(() => {
     if (!location) return;
 
@@ -60,7 +59,6 @@ export default function Search() {
     fetchTeachers();
   }, [location, radius, sort, availability, category]);
 
-  // Fetch for map view (bounds-based) — debounced
   const fetchMapTeachers = useCallback(async (bounds) => {
     if (!location) return;
     try {
@@ -80,7 +78,6 @@ export default function Search() {
   }, [location, sort, availability, category]);
 
   const handleBoundsChange = useCallback((bounds) => {
-    // Debounce: wait 300ms after last pan/zoom before fetching
     if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
     boundsTimerRef.current = setTimeout(() => fetchMapTeachers(bounds), 300);
   }, [fetchMapTeachers]);
@@ -90,37 +87,32 @@ export default function Search() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Photography Teachers in London</h1>
+        <h1 className="font-serif text-3xl text-bark">Photography Teachers in London</h1>
 
-        {/* View toggle */}
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
+        <div className="flex bg-blush rounded-full p-0.5">
           <button
             onClick={() => setView('list')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              view === 'list'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              view === 'list' ? 'bg-white text-bark shadow-sm' : 'text-stone hover:text-bark'
             }`}
           >
             <span className="flex items-center gap-1.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
               List
             </span>
           </button>
           <button
             onClick={() => setView('map')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              view === 'map'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              view === 'map' ? 'bg-white text-bark shadow-sm' : 'text-stone hover:text-bark'
             }`}
           >
             <span className="flex items-center gap-1.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               Map
             </span>
@@ -130,22 +122,19 @@ export default function Search() {
 
       {/* Category Filter */}
       <div className="flex gap-2 overflow-x-auto pb-3 mb-4 -mx-4 px-4 scrollbar-hide">
-        <button onClick={() => setCategory('')} className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!category ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</button>
+        <button onClick={() => setCategory('')} className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${!category ? 'bg-bark text-white' : 'bg-blush text-stone hover:text-bark'}`}>All</button>
         {categories.map(c => (
-          <button key={c.slug} onClick={() => setCategory(c.slug)} className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${category === c.slug ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{c.name}</button>
+          <button key={c.slug} onClick={() => setCategory(c.slug)} className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${category === c.slug ? 'bg-bark text-white' : 'bg-blush text-stone hover:text-bark'}`}>{c.name}</button>
         ))}
       </div>
 
-      {/* Filters — hide radius when in map view since the map bounds replace it */}
-      <div className="flex flex-wrap items-center gap-4 mb-6 bg-white p-4 rounded-xl border border-gray-200">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 mb-6 bg-white p-4 rounded-2xl border border-sand/60">
         {view === 'list' && (
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">Radius:</label>
-            <select
-              value={radius}
-              onChange={(e) => setRadius(Number(e.target.value))}
-              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-            >
+            <label className="text-sm text-stone">Radius:</label>
+            <select value={radius} onChange={(e) => setRadius(Number(e.target.value))}
+              className="border border-sand rounded-lg px-2 py-1.5 text-sm bg-paper text-bark">
               <option value={2}>2 km</option>
               <option value={5}>5 km</option>
               <option value={10}>10 km</option>
@@ -156,24 +145,18 @@ export default function Search() {
         )}
 
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Sort by:</label>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-          >
+          <label className="text-sm text-stone">Sort by:</label>
+          <select value={sort} onChange={(e) => setSort(e.target.value)}
+            className="border border-sand rounded-lg px-2 py-1.5 text-sm bg-paper text-bark">
             <option value="distance">Distance</option>
             <option value="price">Price</option>
           </select>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Availability:</label>
-          <select
-            value={availability}
-            onChange={(e) => setAvailability(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-          >
+          <label className="text-sm text-stone">Availability:</label>
+          <select value={availability} onChange={(e) => setAvailability(e.target.value)}
+            className="border border-sand rounded-lg px-2 py-1.5 text-sm bg-paper text-bark">
             <option value="">Any</option>
             <option value="weekdays">Weekdays</option>
             <option value="weekends">Weekends</option>
@@ -181,20 +164,20 @@ export default function Search() {
         </div>
       </div>
 
-      {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</div>}
+      {error && <div className="bg-red-50 text-red-700 text-sm p-3 rounded-xl mb-4">{error}</div>}
 
       {view === 'list' ? (
         loading ? (
-          <div className="text-center py-12 text-gray-400">Searching for teachers near you...</div>
+          <div className="text-center py-16 text-stone font-serif text-lg italic">Searching for teachers near you...</div>
         ) : teachers.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 mb-2">No teachers found within {radius} km.</p>
-            <p className="text-sm text-gray-400">Try increasing the search radius.</p>
+          <div className="text-center py-16">
+            <p className="text-stone mb-2">No teachers found within {radius} km.</p>
+            <p className="text-sm text-clay">Try increasing the search radius.</p>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-400 mb-4">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''} found</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <p className="text-xs font-mono text-clay mb-4 tracking-wide">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''} found</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {teachers.map((teacher) => (
                 <TeacherCard key={teacher.profile_id} teacher={teacher} />
               ))}
@@ -204,9 +187,9 @@ export default function Search() {
       ) : (
         <>
           {mapTeachers.length > 0 && (
-            <p className="text-sm text-gray-400 mb-4">{mapTeachers.length} teacher{mapTeachers.length !== 1 ? 's' : ''} in view</p>
+            <p className="text-xs font-mono text-clay mb-4 tracking-wide">{mapTeachers.length} teacher{mapTeachers.length !== 1 ? 's' : ''} in view</p>
           )}
-          <Suspense fallback={<div className="text-center py-12 text-gray-400">Loading map...</div>}>
+          <Suspense fallback={<div className="text-center py-16 text-stone">Loading map...</div>}>
             <TeacherMap teachers={mapTeachers} center={location} onBoundsChange={handleBoundsChange} />
           </Suspense>
         </>

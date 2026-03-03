@@ -5,7 +5,8 @@ const { authenticate } = require('../middleware/auth');
 const { createNotification } = require('../lib/notifications');
 const { sendReviewReceivedEmail } = require('../services/email');
 const logger = require('../lib/logger');
-const { validate, createReviewSchema } = require('../lib/validators');
+const { validate, createReviewSchema, editReviewSchema } = require('../lib/validators');
+const { trackEvent } = require('../lib/analytics');
 
 const router = express.Router();
 
@@ -61,6 +62,8 @@ router.post('/', authenticate, validate(createReviewSchema), async (req, res) =>
       }
     }
 
+    trackEvent('review_left', { userId: req.user.id, targetId: booking.teacher_id, metadata: { rating, bookingId } });
+
     res.status(201).json({ review: { id, booking_id: bookingId, rating, comment } });
   } catch (err) {
     logger.error('Create review error:', err);
@@ -69,9 +72,9 @@ router.post('/', authenticate, validate(createReviewSchema), async (req, res) =>
 });
 
 // PATCH /api/reviews/:id — edit a review (only if not locked)
-router.patch('/:id', authenticate, async (req, res) => {
+router.patch('/:id', authenticate, validate(editReviewSchema), async (req, res) => {
   try {
-    const { rating, comment } = req.body;
+    const { rating, comment } = req.validated;
     const db = await getDb();
 
     const review = queryOne(db, 'SELECT * FROM reviews WHERE id = ? AND student_id = ?', [req.params.id, req.user.id]);

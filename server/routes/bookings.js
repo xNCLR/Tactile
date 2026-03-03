@@ -7,6 +7,7 @@ const { sendBookingConfirmation, sendBookingNotification, sendBookingAcceptedEma
 const { createNotification } = require('../lib/notifications');
 const logger = require('../lib/logger');
 const { validate, createIntentSchema, updateMeetingPointSchema, createRecurringIntentSchema } = require('../lib/validators');
+const { trackEvent } = require('../lib/analytics');
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.post('/create-intent', authenticate, validate(createIntentSchema), async 
       }
     }
 
-    const db = await getDb();
+    const db = getDb();
 
     const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email, u.postcode FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [teacherId]);
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
@@ -78,6 +79,7 @@ router.post('/create-intent', authenticate, validate(createIntentSchema), async 
     runSql(db, `INSERT INTO bookings (id, student_id, teacher_id, booking_date, start_time, end_time, duration_hours, total_price, status, payment_status, payment_id, notes, meeting_point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
       [bookingId, req.user.id, teacherId, bookingDate, startTime, endTime, durationHours, discountedPrice, payment.id, notes || null, meetingPoint || null]);
 
+    trackEvent('booking_intent_created', { userId: req.user.id, targetId: teacherId, metadata: { bookingDate, startTime, durationHours } });
     res.status(201).json({
       bookingId,
       clientSecret: payment.client_secret,
@@ -97,7 +99,7 @@ router.post('/create-recurring-intent', authenticate, validate(createRecurringIn
   try {
     const { teacherId, startTime, endTime, durationHours, dayOfWeek, weeks = 4, notes, meetingPoint } = req.validated;
 
-    const db = await getDb();
+    const db = getDb();
     const teacher = queryOne(db, `SELECT tp.*, u.name as teacher_name, u.email as teacher_email FROM teacher_profiles tp JOIN users u ON tp.user_id = u.id WHERE tp.id = ?`, [teacherId]);
     if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
 
@@ -179,7 +181,7 @@ router.post('/confirm', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Missing bookingId or paymentIntentId' });
     }
 
-    const db = await getDb();
+    const db = getDb();
 
     const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ? AND student_id = ?', [bookingId, req.user.id]);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
@@ -224,6 +226,7 @@ router.post('/confirm', authenticate, async (req, res) => {
       link: '/dashboard',
     });
 
+    trackEvent('booking_paid', { userId: req.user.id, targetId: booking.id });
     res.json({
       booking: {
         id: bookingId,
@@ -246,7 +249,7 @@ router.post('/confirm', authenticate, async (req, res) => {
 // GET /api/bookings
 router.get('/', authenticate, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     let bookings;
 
     // Get bookings where user is the student
@@ -271,7 +274,7 @@ router.get('/', authenticate, async (req, res) => {
 // PATCH /api/bookings/:id/accept — teacher accepts booking
 router.patch('/:id/accept', authenticate, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ?', [req.params.id]);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
@@ -309,6 +312,7 @@ router.patch('/:id/accept', authenticate, async (req, res) => {
       });
     }
 
+    trackEvent('booking_confirmed', { userId: req.user.id, targetId: req.params.id });
     res.json({ message: 'Booking accepted', status: 'confirmed' });
   } catch (err) {
     logger.error('Accept booking error:', err);
@@ -319,7 +323,7 @@ router.patch('/:id/accept', authenticate, async (req, res) => {
 // PATCH /api/bookings/:id/decline — teacher declines booking
 router.patch('/:id/decline', authenticate, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ?', [req.params.id]);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
@@ -371,7 +375,7 @@ router.patch('/:id/decline', authenticate, async (req, res) => {
 // PATCH /api/bookings/recurring/:groupId/cancel-all — cancel all future bookings in a series
 router.patch('/recurring/:groupId/cancel-all', authenticate, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const today = new Date().toISOString().split('T')[0];
 
     const bookings = queryAll(db,
@@ -405,7 +409,7 @@ router.patch('/recurring/:groupId/cancel-all', authenticate, async (req, res) =>
 // PATCH /api/bookings/:id/cancel
 router.patch('/:id/cancel', authenticate, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
     const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ?', [req.params.id]);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
@@ -444,6 +448,8 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
     }
 
     runSql(db, `UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', updated_at = datetime('now') WHERE id = ?`, [req.params.id]);
+    const cancelledBy = profile && booking.teacher_id === profile.id ? 'teacher' : 'student';
+    trackEvent('booking_cancelled', { userId: req.user.id, targetId: req.params.id, metadata: { cancelledBy } });
     res.json({ message: 'Booking cancelled and refunded', refundAmount });
   } catch (err) {
     logger.error('Cancellation error:', err);
@@ -454,7 +460,7 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
 // GET /api/bookings/rebook-suggestions — teachers worth rebooking
 router.get('/rebook-suggestions', authenticate, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = getDb();
 
     // Find teachers user had completed lessons with + left a good review (4+), or completed without dispute
     const suggestions = queryAll(db, `
@@ -494,7 +500,7 @@ router.patch('/:id/meeting-point', authenticate, validate(updateMeetingPointSche
     const { meetingPoint } = req.validated;
     if (!meetingPoint?.trim()) return res.status(400).json({ error: 'Meeting point is required' });
 
-    const db = await getDb();
+    const db = getDb();
     const booking = queryOne(db, 'SELECT * FROM bookings WHERE id = ?', [req.params.id]);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 

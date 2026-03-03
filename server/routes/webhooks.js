@@ -16,11 +16,8 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     const sig = req.headers['stripe-signature'];
 
     if (!config.STRIPE_WEBHOOK_SECRET) {
-      logger.warn('STRIPE_WEBHOOK_SECRET not configured, skipping signature verification');
-      // In development without webhook secret, just process the event
-      const event = JSON.parse(req.body);
-      await handleWebhookEvent(event);
-      return res.json({ received: true });
+      logger.error('STRIPE_WEBHOOK_SECRET not configured — rejecting webhook. Use `stripe listen --forward-to` in development.');
+      return res.status(500).json({ error: 'Webhook secret not configured' });
     }
 
     let event;
