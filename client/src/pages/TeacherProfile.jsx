@@ -6,6 +6,7 @@ import BookingModal from '../components/BookingModal';
 import CalendarView from '../components/CalendarView';
 import StarRating from '../components/StarRating';
 import usePageMeta from '../hooks/usePageMeta';
+import AuthModal from '../components/AuthModal';
 import { getInitials, getDisplayName } from '../utils/helpers';
 
 function InquiryModal({ teacherProfileId, teacherName, onClose }) {
@@ -86,6 +87,8 @@ export default function TeacherProfile() {
   const [showInquiry, setShowInquiry] = useState(false);
   const [isShortlisted, setIsShortlisted] = useState(false);
   const [togglingShortlist, setTogglingShortlist] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMessage, setAuthMessage] = useState('');
 
   usePageMeta({
     title: teacher ? getDisplayName(teacher.name) + ' — Photography Teacher' : 'Teacher',
@@ -121,7 +124,8 @@ export default function TeacherProfile() {
 
   const handleToggleShortlist = async () => {
     if (!user) {
-      alert('Please log in to shortlist teachers');
+      setAuthMessage('Create an account or log in to save teachers.');
+      setShowAuthModal(true);
       return;
     }
     setTogglingShortlist(true);
@@ -243,13 +247,19 @@ export default function TeacherProfile() {
 
           <div className="flex gap-3">
             <button
-              onClick={() => { setBookingPreselect(null); setShowBooking(true); }}
+              onClick={() => {
+                if (!user) { setAuthMessage('Create an account or log in to book a lesson.'); setShowAuthModal(true); return; }
+                setBookingPreselect(null); setShowBooking(true);
+              }}
               className="flex-1 bg-bark text-white py-3 rounded-full font-medium hover:bg-charcoal transition-colors"
             >
               Book a Lesson
             </button>
             <button
-              onClick={() => setShowInquiry(true)}
+              onClick={() => {
+                if (!user) { setAuthMessage('Create an account or log in to send a message.'); setShowAuthModal(true); return; }
+                setShowInquiry(true);
+              }}
               className="flex-1 bg-blush text-bark py-3 rounded-full font-medium hover:bg-sand transition-colors"
             >
               Ask a Question
@@ -384,6 +394,7 @@ export default function TeacherProfile() {
           <CalendarView
             timeSlots={timeSlots}
             onSlotClick={(seg, date) => {
+              if (!user) { setAuthMessage('Create an account or log in to book a lesson.'); setShowAuthModal(true); return; }
               setBookingPreselect({
                 startTime: seg.startTime,
                 endTime: seg.endTime,
@@ -410,6 +421,14 @@ export default function TeacherProfile() {
           teacherProfileId={teacher.profile_id}
           teacherName={getDisplayName(teacher.name)}
           onClose={() => setShowInquiry(false)}
+        />
+      )}
+
+      {showAuthModal && (
+        <AuthModal
+          message={authMessage}
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => setShowAuthModal(false)}
         />
       )}
     </div>
