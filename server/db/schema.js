@@ -302,9 +302,10 @@ function initDb() {
     console.log('Backfilled conversations from existing messages');
   }
 
-  // Booking window + availability confirmation columns (added post-initial schema)
+  // Booking window + availability confirmation + pause columns (added post-initial schema)
   try { db.exec('ALTER TABLE teacher_profiles ADD COLUMN booking_window_hours INTEGER DEFAULT 2'); } catch (e) { /* exists */ }
   try { db.exec('ALTER TABLE teacher_profiles ADD COLUMN availability_confirmed_at TEXT'); } catch (e) { /* exists */ }
+  try { db.exec('ALTER TABLE teacher_profiles ADD COLUMN is_paused INTEGER DEFAULT 0'); } catch (e) { /* exists */ }
 
   // ── Analytics events ──
   db.exec(`CREATE TABLE IF NOT EXISTS analytics_events (

@@ -9,6 +9,7 @@ const config = require('../config');
 const logger = require('../lib/logger');
 const { validate, registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } = require('../lib/validators');
 const { trackEvent } = require('../lib/analytics');
+const { geocodePostcode } = require('../lib/geocode');
 
 const { OAuth2Client } = require('google-auth-library');
 
@@ -34,11 +35,22 @@ router.post('/register', validate(registerSchema), async (req, res) => {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
+    // Geocode postcode if lat/lng not provided
+    let lat = latitude || null;
+    let lng = longitude || null;
+    if (!lat && !lng && postcode) {
+      const coords = await geocodePostcode(postcode);
+      if (coords) {
+        lat = coords.latitude;
+        lng = coords.longitude;
+      }
+    }
+
     const userId = uuidv4();
     const passwordHash = bcrypt.hashSync(password, 10);
 
     runSql(db, `INSERT INTO users (id, email, password_hash, name, role, phone, postcode, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [userId, email, passwordHash, name, 'user', phone || null, postcode || null, latitude || null, longitude || null]);
+      [userId, email, passwordHash, name, 'user', phone || null, postcode || null, lat, lng]);
 
     // Generate tokens
     const user = { id: userId, email };

@@ -243,6 +243,8 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [teacherTimeSlots, setTeacherTimeSlots] = useState([]);
   const [shortlist, setShortlist] = useState([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseLoading, setPauseLoading] = useState(false);
 
   const loadData = () => {
     api.getBookings()
@@ -266,7 +268,10 @@ export default function Dashboard() {
         .then(data => setAnalytics(data))
         .catch(console.error);
       api.getTeacher(teacherProfile.id)
-        .then(data => setTeacherTimeSlots(data.timeSlots || []))
+        .then(data => {
+          setTeacherTimeSlots(data.timeSlots || []);
+          setIsPaused(!!data.is_paused);
+        })
         .catch(console.error);
     }
   };
@@ -367,6 +372,38 @@ export default function Dashboard() {
           >
             Start Teaching
           </Link>
+        </div>
+      )}
+
+      {/* Pause Banner */}
+      {teacherProfile && (
+        <div className={`rounded-2xl border p-4 mb-6 flex items-center justify-between ${isPaused ? 'bg-amber-50 border-amber-200' : 'bg-white border-sand'}`}>
+          <div>
+            <p className="text-sm font-medium text-bark">
+              {isPaused ? 'Your profile is paused' : 'Your profile is live'}
+            </p>
+            <p className="text-xs text-stone mt-0.5">
+              {isPaused ? 'Students can\'t find you in search results.' : 'Students can find and book you.'}
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              setPauseLoading(true);
+              try {
+                const res = await api.togglePause();
+                setIsPaused(res.is_paused);
+              } catch (err) { console.error(err); }
+              finally { setPauseLoading(false); }
+            }}
+            disabled={pauseLoading}
+            className={`text-xs font-medium px-4 py-2 rounded-full transition-colors ${
+              isPaused
+                ? 'bg-terracotta text-white hover:bg-brand-700'
+                : 'bg-sand text-stone hover:bg-stone/10'
+            } disabled:opacity-50`}
+          >
+            {pauseLoading ? '...' : isPaused ? 'Resume Profile' : 'Pause Profile'}
+          </button>
         </div>
       )}
 

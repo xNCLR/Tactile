@@ -71,7 +71,7 @@ router.get('/search', optionalAuth, validateQuery(searchTeachersSchema), async (
       (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories,
       (SELECT COUNT(*) FROM time_slots ts WHERE ts.teacher_id = tp.id AND ts.is_available = 1 AND ts.day_of_week BETWEEN 1 AND 5) as weekday_slots,
       (SELECT COUNT(*) FROM time_slots ts WHERE ts.teacher_id = tp.id AND ts.is_available = 1 AND ts.day_of_week IN (0, 6)) as weekend_slots
-      FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE 1=1`;
+      FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.is_paused = 0`;
 
     // Filter by actual time slots rather than stale flags
     if (availability === 'weekdays') query += ' AND (SELECT COUNT(*) FROM time_slots ts WHERE ts.teacher_id = tp.id AND ts.is_available = 1 AND ts.day_of_week BETWEEN 1 AND 5) > 0';
@@ -171,7 +171,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       tp.id as profile_id, tp.bio, tp.hourly_rate, tp.equipment_requirements,
       tp.photo_1, tp.photo_2, tp.photo_3, tp.available_weekdays, tp.available_weekends, tp.search_radius_km,
       tp.cancellation_hours, tp.verification_status, tp.first_lesson_discount, tp.bulk_discount,
-      tp.booking_window_hours, tp.availability_confirmed_at,
+      tp.booking_window_hours, tp.availability_confirmed_at, tp.is_paused,
       (SELECT COUNT(*) FROM bookings b WHERE b.teacher_id = tp.id AND b.status IN ('completed', 'confirmed')) as lesson_count,
       (SELECT GROUP_CONCAT(c.slug) FROM teacher_categories tc JOIN categories c ON tc.category_id = c.id WHERE tc.teacher_id = tp.id) as categories
       FROM users u JOIN teacher_profiles tp ON u.id = tp.user_id WHERE tp.id = ?`, [req.params.id]);
@@ -273,6 +273,23 @@ router.put('/profile', authenticate, validate(updateTeacherProfileSchema), async
     logger.error('Profile update error:', err);
     const detail = config.NODE_ENV !== 'production' ? ` (${err.message})` : '';
     res.status(500).json({ error: `Failed to update profile${detail}` });
+  }
+});
+
+// POST /api/teachers/pause — toggle teacher profile visibility
+router.post('/pause', authenticate, requireTeacherProfile, async (req, res) => {
+  try {
+    const db = getDb();
+    const profile = queryOne(db, 'SELECT id, is_paused FROM teacher_profiles WHERE user_id = ?', [req.user.id]);
+    if (!profile) return res.status(404).json({ error: 'Teacher profile not found' });
+
+    const newState = profile.is_paused ? 0 : 1;
+    runSql(db, 'UPDATE teacher_profiles SET is_paused = ?, updated_at = datetime(\'now\') WHERE id = ?', [newState, profile.id]);
+
+    res.json({ is_paused: !!newState });
+  } catch (err) {
+    logger.error('Pause toggle error:', err);
+    res.status(500).json({ error: 'Failed to toggle pause' });
   }
 });
 
